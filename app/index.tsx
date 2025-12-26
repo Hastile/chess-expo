@@ -5,7 +5,7 @@ import { findKingSquare, getLegalMoves, isSquareAttacked, opposite } from "@/scr
 
 import { Audio } from "expo-av";
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Dimensions, Pressable, StyleSheet, Text, View } from "react-native";
+import { Dimensions, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import {
@@ -23,6 +23,8 @@ export default function Index() {
     createInitialState(INITIAL_PIECES)
   );
 
+  const scrollRef = useRef<ScrollView>(null); // ✅ 기보 스크롤 제어용
+
   // DB 연결 대비 (지금은 비워둠)
   const [evalValue] = useState<number>(0);
   const [recommendations] = useState<RecommendationItem[]>([]);
@@ -35,16 +37,14 @@ export default function Index() {
   const canUndo = moveState.past.length > 0;
   const canRedo = moveState.future.length > 0;
 
-  // ✅ 실시간 게임 상태 계산 (체크, 메이트, 스테일메이트)
+  // ✅ 실시간 게임 상태 계산
   const checkInfo = useMemo(() => {
     const { pieces, turn } = moveState;
     const kingSq = findKingSquare(pieces, turn);
     const enemy = opposite(turn);
 
-    // 1. 체크 여부
     const inCheck = kingSq ? isSquareAttacked(pieces, kingSq, enemy) : false;
 
-    // 2. 가능한 수가 있는지 확인
     let hasMoves = false;
     for (const sq in pieces) {
       if (pieces[sq as Square]?.color === turn) {
@@ -106,6 +106,11 @@ export default function Index() {
       } else {
         playSound('move');
       }
+
+      // ✅ 새로운 수가 두어지면 기보 스크롤을 맨 뒤로 이동
+      setTimeout(() => {
+        scrollRef.current?.scrollToEnd({ animated: true });
+      }, 100);
     }
     prevMoveCount.current = currentCount;
   }, [moveState.moveHistory.length, checkInfo]);
@@ -140,6 +145,27 @@ export default function Index() {
         />
 
         <EvalBar value={evalValue} />
+
+        {/* ✅ 가로 스크롤 기보 (공간 절약형) */}
+        <View style={styles.timelineSection}>
+          <ScrollView
+            ref={scrollRef}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.timelineContent}
+          >
+            {grouped.map(([ply, moves]) => (
+              <View key={ply} style={styles.plyChip}>
+                <Text style={styles.plyLabel}>{ply}.</Text>
+                {moves.map((san, i) => (
+                  <Text key={i} style={styles.plyMoveText}>
+                    {san}
+                  </Text>
+                ))}
+              </View>
+            ))}
+          </ScrollView>
+        </View>
 
         <View style={styles.actionsRow}>
           <Pressable
@@ -188,22 +214,6 @@ export default function Index() {
             onSelectBranch={(b) => console.log("select branch:", b)}
           />
         </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>기보</Text>
-          {grouped.map(([ply, moves]) => (
-            <View key={ply} style={styles.plyGroup}>
-              <Text style={styles.plyLabel}>{ply}.</Text>
-              <View style={styles.plyMovesWrap}>
-                {moves.map((san, i) => (
-                  <Text key={i} style={styles.plyMoveText}>
-                    {san}
-                  </Text>
-                ))}
-              </View>
-            </View>
-          ))}
-        </View>
       </View>
     </SafeAreaView>
   );
@@ -218,6 +228,32 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     gap: 16,
   },
+
+  // ✅ 기보 섹션 스타일 변경
+  timelineSection: {
+    width: "100%",
+    height: 44,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderRadius: 8,
+    overflow: "hidden",
+  },
+  timelineContent: {
+    paddingHorizontal: 12,
+    alignItems: "center",
+    gap: 12,
+  },
+  plyChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.08)",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    gap: 6,
+  },
+  plyLabel: { fontSize: 13, fontWeight: "700", color: "rgba(231,237,245,0.4)" },
+  plyMoveText: { fontSize: 14, fontWeight: "600", color: "#E7EDF5" },
+
   actionsRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -230,8 +266,4 @@ const styles = StyleSheet.create({
   actionLabel: { fontSize: 12, color: "rgba(231,237,245,0.8)" },
   section: { width: "100%", maxWidth: 360, gap: 8 },
   sectionTitle: { fontSize: 14, fontWeight: "600", color: "#E7EDF5" },
-  plyGroup: { flexDirection: "row", gap: 8, alignItems: "flex-start" },
-  plyLabel: { width: 24, fontSize: 13, fontWeight: "700", color: "rgba(231,237,245,0.6)" },
-  plyMovesWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8, flex: 1 },
-  plyMoveText: { fontSize: 13, color: "rgba(231,237,245,0.85)" },
 });
