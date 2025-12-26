@@ -9,6 +9,7 @@ import { Dimensions, Pressable, ScrollView, StyleSheet, Text, View } from "react
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { EvalType } from "@/components/Icons";
+import PromotionModal from "@/components/PromotionModal";
 import openingData from "@/scripts/opening.json";
 
 import {
@@ -28,6 +29,8 @@ export default function Index() {
 
   // ✅ 마지막 수의 평가 아이콘 정보 상태
   const [lastMoveEval, setLastMoveEval] = useState<{ type: EvalType, toSq: Square } | null>(null);
+
+  const [pendingPromotion, setPendingPromotion] = useState<{ from: Square, to: Square } | null>(null);
 
   const scrollRef = useRef<ScrollView>(null);
 
@@ -65,10 +68,25 @@ export default function Index() {
     };
   }, [moveState.fen]);
 
+  const handlePromotionSelect = (piece: string) => {
+    if (!pendingPromotion) return;
+
+    setMoveState(prev => {
+      const next = handleSquarePress(prev, pendingPromotion.to, piece);
+      // 아이콘 트리거 로직 등...
+      return next;
+    });
+    setPendingPromotion(null);
+  };
   // ✅ 보드 터치 핸들러: 이동 전 추천수와 대조하여 아이콘 표시
   const onSquarePress = (sq: Square) => {
     // 1. 현재 추천수 목록 캡처 (이동 전 상태 기준)
     const currentRecs = openingInfo.recommendations;
+
+    if (moveState.selected && isPawnPromotion(moveState, moveState.selected, sq)) {
+      setPendingPromotion({ from: moveState.selected, to: sq });
+      return;
+    }
 
     // 2. 실제 이동 처리
     const next = handleSquarePress(moveState, sq);
@@ -175,6 +193,13 @@ export default function Index() {
           }}
           lastMoveEval={lastMoveEval}
         />
+
+        {pendingPromotion && (
+          <PromotionModal
+            color={moveState.turn}
+            onSelect={handlePromotionSelect}
+          />
+        )}
 
         <EvalBar value={openingInfo.eval} />
 

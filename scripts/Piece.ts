@@ -218,6 +218,7 @@ function buildSan(opts: {
     from: Square; to: Square; capture: boolean;
     isCastle?: "O-O" | "O-O-O";
     check?: boolean; mate?: boolean; // ✅ 체크/메이트 여부 추가
+    promotion?: string;
 }) {
     const prefix = opts.mover.color === "black" ? "... " : "";
     let base = "";
@@ -226,6 +227,10 @@ function buildSan(opts: {
         if (opts.capture) base = `${opts.from[0]}x${opts.to}`; else base = opts.to;
     } else {
         base = `${PIECE_LETTER[opts.mover.piece]}${opts.capture ? "x" : ""}${opts.to}`;
+    }
+
+    if (opts.promotion) {
+        base += "=" + opts.promotion.toUpperCase();
     }
 
     // ✅ 기호 추가: 메이트가 우선

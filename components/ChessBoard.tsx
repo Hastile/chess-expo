@@ -10,7 +10,7 @@ export type Square = `${"a" | "b" | "c" | "d" | "e" | "f" | "g" | "h"}${1 | 2 | 
 export type PiecesMap = Partial<Record<Square, { color: Color; piece: Piece }>>;
 
 /* ===== Piece Images (기존 유지) ===== */
-const PIECE_IMAGES: Record<Color, Record<Piece, any>> = {
+export const PIECE_IMAGES: Record<Color, Record<Piece, any>> = {
     white: {
         king: require("../assets/images/Units/WhiteKing.webp"),
         queen: require("../assets/images/Units/WhiteQueen.webp"),
