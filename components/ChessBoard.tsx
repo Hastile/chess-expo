@@ -138,6 +138,7 @@ export default function ChessBoard({
                                 return (
                                     <Pressable
                                         key={squareName}
+                                        onPress={() => onSquarePress?.(squareName)} // 이 줄이 추가되어야 합니다
                                         style={[
                                             styles.square,
                                             {
@@ -157,7 +158,13 @@ export default function ChessBoard({
                                                 contentFit="contain"
                                             />
                                         )}
-
+                                        {/* 합법 이동 표시 추가 (기존 코드에서 누락됨) */}
+                                        {isLegal && (
+                                            <View
+                                                pointerEvents="none"
+                                                style={piece ? styles.legalRing : styles.legalDot}
+                                            />
+                                        )}
                                         {/* 체크메이트 아이콘 표시 */}
                                         {isCheckmate && (
                                             <Image

@@ -82,9 +82,11 @@ export default function Index() {
           onSquarePress={(sq) =>
             setMoveState((prev) => handleSquarePress(prev, sq))
           }
-          inCheck={checkInfo.inCheck}
-          isCheckmate={checkInfo.isCheckmate}
-          kingSquare={checkInfo.kingSquare}
+          checkState={{
+            inCheck: checkInfo.inCheck,
+            checkmated: checkInfo.isCheckmate,
+            kingSquare: checkInfo.kingSquare
+          }}
         />
 
         {/* ✅ 평가치 바 (components로 분리) */}
