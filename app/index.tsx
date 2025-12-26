@@ -3,7 +3,8 @@ import EvalBar from "@/components/EvalBar";
 import Recommendations, { RecommendationItem } from "@/components/Recommendations";
 import { findKingSquare, getLegalMoves, isSquareAttacked, opposite } from "@/scripts/Piece";
 
-import React, { useMemo, useState } from "react";
+import { Audio } from "expo-av";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Dimensions, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -34,25 +35,16 @@ export default function Index() {
   const canUndo = moveState.past.length > 0;
   const canRedo = moveState.future.length > 0;
 
-  // ply 그룹 (moveHistory는 이미 "... " 프리픽스를 포함할 수 있음)
-  const grouped = useMemo(() => {
-    const map = new Map<number, string[]>();
-    for (const m of moveState.moveHistory) {
-      if (!map.has(m.ply)) map.set(m.ply, []);
-      map.get(m.ply)!.push(m.san);
-    }
-    return Array.from(map.entries());
-  }, [moveState.moveHistory]);
-
+  // ✅ 실시간 게임 상태 계산 (체크, 메이트, 스테일메이트)
   const checkInfo = useMemo(() => {
     const { pieces, turn } = moveState;
     const kingSq = findKingSquare(pieces, turn);
     const enemy = opposite(turn);
 
-    // 1. 체크 여부 확인
+    // 1. 체크 여부
     const inCheck = kingSq ? isSquareAttacked(pieces, kingSq, enemy) : false;
 
-    // 2. 가능한 수가 하나라도 있는지 확인
+    // 2. 가능한 수가 있는지 확인
     let hasMoves = false;
     for (const sq in pieces) {
       if (pieces[sq as Square]?.color === turn) {
@@ -63,12 +55,70 @@ export default function Index() {
       }
     }
 
+    const isCheckmate = inCheck && !hasMoves;
+    const isStalemate = !inCheck && !hasMoves;
+
     return {
       inCheck,
-      isCheckmate: inCheck && !hasMoves,
+      checkmated: isCheckmate,
+      isStalemate,
       kingSquare: kingSq
     };
   }, [moveState]);
+
+  // ✅ 소리 재생 로직
+  const prevMoveCount = useRef(moveState.moveHistory.length);
+  const sounds = {
+    move: require('../assets/sfx/move.wav'),
+    capture: require('../assets/sfx/capture.wav'),
+    castling: require('../assets/sfx/castling.wav'),
+    check: require('../assets/sfx/check.wav'),
+    gameover: require('../assets/sfx/gameover.wav'),
+  };
+
+  const playSound = async (type: keyof typeof sounds) => {
+    try {
+      const { sound } = await Audio.Sound.createAsync(sounds[type]);
+      await sound.playAsync();
+      sound.setOnPlaybackStatusUpdate((status) => {
+        if (status.isLoaded && status.didJustFinish) {
+          sound.unloadAsync();
+        }
+      });
+    } catch (e) {
+      console.log("Sound play error:", e);
+    }
+  };
+
+  useEffect(() => {
+    const currentCount = moveState.moveHistory.length;
+    if (currentCount > prevMoveCount.current) {
+      const lastMove = moveState.moveHistory[currentCount - 1];
+
+      if (checkInfo.checkmated || checkInfo.isStalemate) {
+        playSound('gameover');
+      } else if (checkInfo.inCheck) {
+        playSound('check');
+      } else if (lastMove.san.includes('O-O')) {
+        playSound('castling');
+      } else if (lastMove.san.includes('x')) {
+        playSound('capture');
+      } else {
+        playSound('move');
+      }
+    }
+    prevMoveCount.current = currentCount;
+  }, [moveState.moveHistory.length, checkInfo]);
+
+  // 기보 그룹화
+  const grouped = useMemo(() => {
+    const map = new Map<number, string[]>();
+    for (const m of moveState.moveHistory) {
+      if (!map.has(m.ply)) map.set(m.ply, []);
+      map.get(m.ply)!.push(m.san);
+    }
+    return Array.from(map.entries());
+  }, [moveState.moveHistory]);
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -84,15 +134,13 @@ export default function Index() {
           }
           checkState={{
             inCheck: checkInfo.inCheck,
-            checkmated: checkInfo.isCheckmate,
+            checkmated: checkInfo.checkmated,
             kingSquare: checkInfo.kingSquare
           }}
         />
 
-        {/* ✅ 평가치 바 (components로 분리) */}
         <EvalBar value={evalValue} />
 
-        {/* Actions */}
         <View style={styles.actionsRow}>
           <Pressable
             disabled={!canUndo}
@@ -131,7 +179,6 @@ export default function Index() {
           </Pressable>
         </View>
 
-        {/* ✅ 추천 수 (components로 분리) */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>추천 수</Text>
           <Recommendations
@@ -142,7 +189,6 @@ export default function Index() {
           />
         </View>
 
-        {/* Timeline */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>기보</Text>
           {grouped.map(([ply, moves]) => (
@@ -172,33 +218,20 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     gap: 16,
   },
-
   actionsRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     width: "100%",
     maxWidth: 360,
   },
-  actionButton: {
-    alignItems: "center",
-    width: 72,
-    paddingVertical: 6,
-    borderRadius: 10,
-  },
+  actionButton: { alignItems: "center", width: 72, paddingVertical: 6, borderRadius: 10 },
   actionDisabled: { opacity: 0.35 },
   actionIcon: { fontSize: 22, lineHeight: 26 },
   actionLabel: { fontSize: 12, color: "rgba(231,237,245,0.8)" },
-
   section: { width: "100%", maxWidth: 360, gap: 8 },
   sectionTitle: { fontSize: 14, fontWeight: "600", color: "#E7EDF5" },
-
   plyGroup: { flexDirection: "row", gap: 8, alignItems: "flex-start" },
-  plyLabel: {
-    width: 24,
-    fontSize: 13,
-    fontWeight: "700",
-    color: "rgba(231,237,245,0.6)",
-  },
+  plyLabel: { width: 24, fontSize: 13, fontWeight: "700", color: "rgba(231,237,245,0.6)" },
   plyMovesWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8, flex: 1 },
   plyMoveText: { fontSize: 13, color: "rgba(231,237,245,0.85)" },
 });
