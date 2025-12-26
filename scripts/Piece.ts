@@ -47,7 +47,7 @@ function makeSquare(file: number, rank: number) {
     const f = String.fromCharCode(97 + file);
     return `${f}${rank + 1}` as Square;
 }
-function opposite(turn: Turn): Turn {
+export function opposite(turn: Turn): Turn {
     return turn === "white" ? "black" : "white";
 }
 
@@ -75,7 +75,7 @@ function isPathClear(pieces: PiecesMap, from: Square, to: Square) {
 }
 
 /* ===== Attack detection ===== */
-function findKingSquare(pieces: PiecesMap, color: Color): Square | null {
+export function findKingSquare(pieces: PiecesMap, color: Color): Square | null {
     for (const k in pieces) {
         const sq = k as Square;
         const p = pieces[sq];
@@ -84,7 +84,7 @@ function findKingSquare(pieces: PiecesMap, color: Color): Square | null {
     return null;
 }
 
-function isSquareAttacked(pieces: PiecesMap, target: Square, byColor: Color): boolean {
+export function isSquareAttacked(pieces: PiecesMap, target: Square, byColor: Color): boolean {
     const t = toCoord(target);
 
     const inBoard = (f: number, r: number) => f >= 0 && f < 8 && r >= 0 && r < 8;

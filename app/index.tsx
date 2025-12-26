@@ -1,6 +1,7 @@
-import ChessBoard, { INITIAL_PIECES } from "@/components/ChessBoard";
+import ChessBoard, { INITIAL_PIECES, Square } from "@/components/ChessBoard";
 import EvalBar from "@/components/EvalBar";
 import Recommendations, { RecommendationItem } from "@/components/Recommendations";
+import { findKingSquare, getLegalMoves, isSquareAttacked, opposite } from "@/scripts/Piece";
 
 import React, { useMemo, useState } from "react";
 import { Dimensions, Pressable, StyleSheet, Text, View } from "react-native";
@@ -43,6 +44,32 @@ export default function Index() {
     return Array.from(map.entries());
   }, [moveState.moveHistory]);
 
+  const checkInfo = useMemo(() => {
+    const { pieces, turn } = moveState;
+    const kingSq = findKingSquare(pieces, turn);
+    const enemy = opposite(turn);
+
+    // 1. 체크 여부 확인
+    const inCheck = kingSq ? isSquareAttacked(pieces, kingSq, enemy) : false;
+
+    // 2. 가능한 수가 하나라도 있는지 확인
+    let hasMoves = false;
+    for (const sq in pieces) {
+      if (pieces[sq as Square]?.color === turn) {
+        if (getLegalMoves(moveState, sq as Square).length > 0) {
+          hasMoves = true;
+          break;
+        }
+      }
+    }
+
+    return {
+      inCheck,
+      isCheckmate: inCheck && !hasMoves,
+      kingSquare: kingSq
+    };
+  }, [moveState]);
+
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.container}>
@@ -55,6 +82,9 @@ export default function Index() {
           onSquarePress={(sq) =>
             setMoveState((prev) => handleSquarePress(prev, sq))
           }
+          inCheck={checkInfo.inCheck}
+          isCheckmate={checkInfo.isCheckmate}
+          kingSquare={checkInfo.kingSquare}
         />
 
         {/* ✅ 평가치 바 (components로 분리) */}

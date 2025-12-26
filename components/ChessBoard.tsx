@@ -1,5 +1,7 @@
+import { CheckState } from "@/scripts/Piece";
+import { Image } from "expo-image"; // SVG 지원을 위해 expo-image 권장
 import React, { useMemo } from "react";
-import { Image, Pressable, StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 
 /* ===== Types ===== */
 export type Color = "white" | "black";
@@ -87,6 +89,7 @@ type Props = {
     selectedSquare?: Square | null;
     legalMoves?: Square[];
     onSquarePress?: (square: Square) => void;
+    checkState?: CheckState; // 추가
 };
 
 /* ===== Component ===== */
@@ -96,7 +99,8 @@ export default function ChessBoard({
     orientation = "white",
     selectedSquare,
     legalMoves,
-    onSquarePress
+    onSquarePress,
+    checkState
 }: Props) {
     const square = Math.floor(size / 8);
     const boardSize = square * 8;
@@ -128,10 +132,12 @@ export default function ChessBoard({
 
                                 const isLight = (fileIndex + rank) % 2 === 1;
 
+                                const isKingInCheck = checkState?.inCheck && squareName === checkState.kingSquare;
+                                const isCheckmate = checkState?.checkmated && squareName === checkState.kingSquare;
+
                                 return (
                                     <Pressable
                                         key={squareName}
-                                        onPress={() => onSquarePress?.(squareName)}
                                         style={[
                                             styles.square,
                                             {
@@ -139,22 +145,26 @@ export default function ChessBoard({
                                                 height: square,
                                                 backgroundColor: isLight ? "#EADDCB" : "#B58863",
                                                 ...(isSelected && { backgroundColor: "#E6C36A" }),
+                                                ...(isKingInCheck && { backgroundColor: "#EF4444" }), // 체크 시 붉은색 강조
                                             },
                                         ]}
                                     >
-                                        {/* 합법 이동 표시 (빈칸/캡처칸 모두) */}
-                                        {isLegal && (
-                                            <View
-                                                pointerEvents="none"
-                                                style={piece ? styles.legalRing : styles.legalDot}
-                                            />
-                                        )}
-
+                                        {/* 기물 이미지 */}
                                         {piece && (
                                             <Image
                                                 source={PIECE_IMAGES[piece.color][piece.piece]}
                                                 style={{ width: square * 0.9, height: square * 0.9 }}
-                                                resizeMode="contain"
+                                                contentFit="contain"
+                                            />
+                                        )}
+
+                                        {/* 체크메이트 아이콘 표시 */}
+                                        {isCheckmate && (
+                                            <Image
+                                                source={piece?.color === "white"
+                                                    ? require("../assets/images/moves/checkmate_white.svg")
+                                                    : require("../assets/images/moves/checkmate_black.svg")}
+                                                style={styles.checkmateIcon}
                                             />
                                         )}
                                     </Pressable>
@@ -202,5 +212,12 @@ const styles = StyleSheet.create({
         borderColor: "rgba(0,0,0,0.35)",
         backgroundColor: "transparent",
         position: "absolute",
+    },
+    checkmateIcon: {
+        position: "absolute",
+        top: 2,
+        right: 2,
+        width: 16,
+        height: 16,
     },
 });
