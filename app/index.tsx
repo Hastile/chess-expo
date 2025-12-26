@@ -39,7 +39,7 @@ export default function Index() {
   const canUndo = moveState.past.length > 0;
   const canRedo = moveState.future.length > 0;
 
-  // ✅ FEN 기반 데이터 추출 로직 (공통 사용)
+  // ✅ FEN 매칭 헬퍼 함수 (앞 3마디 기준)
   const getEntryByFen = (fen: string) => {
     const base = fen.split(' ').slice(0, 3).join(' ');
     const foundKey = Object.keys(openingData).find(key =>
@@ -73,14 +73,14 @@ export default function Index() {
     setMoveState((prev) => {
       const next = handleSquarePress(prev, sq);
 
-      // 수가 실제로 두어졌을 때만 로직 실행
+      // 수가 실제로 두어졌는지 확인 (기보 기록 증가)
       if (next.moveHistory.length > prev.moveHistory.length) {
-        // 1. 이동 후의 FEN으로 데이터 검색
+        // 1. 이동 후 도달한 국면(FEN)의 데이터를 가져옴
         const nextData = getEntryByFen(next.fen);
 
-        // 2. 결과 국면에 type이 정의되어 있다면 아이콘 표시
+        // 2. 해당 국면에 'type'이 정의되어 있다면 아이콘 상태 업데이트
         if (nextData && nextData.type) {
-          setLastMoveEval({ type: nextData.type, toSq: sq });
+          setLastMoveEval({ type: nextData.type as EvalType, toSq: sq });
         } else {
           setLastMoveEval(null);
         }
@@ -89,8 +89,8 @@ export default function Index() {
     });
   };
 
+  // ✅ 기보가 바뀌면 (Undo 등) 아이콘 초기화
   useEffect(() => {
-    // 무르기나 초기화 시 아이콘 제거
     if (moveState.moveHistory.length === 0) setLastMoveEval(null);
   }, [moveState.fen]);
 
@@ -124,7 +124,7 @@ export default function Index() {
     return { inCheck, checkmated: inCheck && !hasMoves, isStalemate: !inCheck && !hasMoves, kingSquare: kingSq };
   }, [moveState]);
 
-  // 사운드 관련 로직 생략 (기존 유지)
+  // 사운드 재생 로직 (기존 유지)
   const movePlayer = useAudioPlayer(require('../assets/sfx/move.wav'));
   const capturePlayer = useAudioPlayer(require('../assets/sfx/capture.wav'));
   const castlingPlayer = useAudioPlayer(require('../assets/sfx/castling.wav'));
@@ -169,13 +169,13 @@ export default function Index() {
           pieces={moveState.pieces}
           selectedSquare={moveState.selected}
           legalMoves={moveState.legalMoves}
-          onSquarePress={onSquarePress}
+          onSquarePress={onSquarePress} // ✅ 수정된 핸들러 연결
           checkState={{
             inCheck: checkInfo.inCheck,
             checkmated: checkInfo.checkmated,
             kingSquare: checkInfo.kingSquare
           }}
-          lastMoveEval={lastMoveEval}
+          lastMoveEval={lastMoveEval} // ✅ 아이콘 정보 전달
         />
 
         <EvalBar value={openingInfo.eval} />
@@ -220,8 +220,8 @@ export default function Index() {
           <Recommendations
             items={openingInfo.recommendations}
             height={200}
-            onSelectMove={(move) => console.log("Move selected:", move)}
-            onSelectBranch={(branch, parent) => console.log(`[${parent.move}] Branch: ${branch}`)}
+            onSelectMove={(move) => console.log(`선택됨: ${move}`)}
+            onSelectBranch={(branch, parent) => console.log(`[${parent.move}] 분기: ${branch}`)}
           />
         </View>
       </View>
