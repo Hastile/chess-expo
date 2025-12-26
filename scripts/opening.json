@@ -6,6 +6,7 @@
             "en": "Starting Position"
         },
         "eval": 0.0,
+        "type": "",
         "moves": {
             "e4": {
                 "type": "book",
@@ -33,7 +34,8 @@
             "ko": "킹즈 폰 오프닝",
             "en": "King's Pawn Opening"
         },
-        "eval": 10,
+        "eval": 0.2,
+        "type": "book",
         "moves": {
             "e5": {
                 "type": "book",

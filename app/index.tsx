@@ -25,6 +25,8 @@ export default function Index() {
   const [moveState, setMoveState] = useState<MoveState>(() =>
     createInitialState(INITIAL_PIECES)
   );
+
+  // ✅ 마지막 수의 평가 아이콘 정보 상태
   const [lastMoveEval, setLastMoveEval] = useState<{ type: EvalType, toSq: Square } | null>(null);
 
   const scrollRef = useRef<ScrollView>(null);
@@ -37,21 +39,17 @@ export default function Index() {
   const canUndo = moveState.past.length > 0;
   const canRedo = moveState.future.length > 0;
 
-  // ✅ 오프닝 정보 추출 (한글/영어 이름 포함)
+  // ✅ FEN 기반 데이터 추출 로직 (공통 사용)
+  const getEntryByFen = (fen: string) => {
+    const base = fen.split(' ').slice(0, 3).join(' ');
+    const foundKey = Object.keys(openingData).find(key =>
+      key.split(' ').slice(0, 3).join(' ') === base
+    );
+    return foundKey ? (openingData as any)[foundKey] : null;
+  };
+
   const openingInfo = useMemo(() => {
-    const currentBase = moveState.fen.split(' ').slice(0, 3).join(' ');
-
-    // 🔍 여기 로그를 꼭 확인하세요!
-    const foundKey = Object.keys(openingData).find(key => {
-      const dbBase = key.split(' ').slice(0, 3).join(' ');
-      return dbBase === currentBase;
-    });
-
-    const data = foundKey ? (openingData as any)[foundKey] : null;
-
-    // 로그로 데이터가 찍히는지 확인
-    // console.log(`[Debug] Current Base: ${currentBase}`);
-    // console.log(`[Debug] Found Data:`, data);
+    const data = getEntryByFen(moveState.fen);
 
     if (!data) {
       return { name: "알 수 없는 오프닝", enName: "Unknown", recommendations: [], eval: 0 };
@@ -66,8 +64,34 @@ export default function Index() {
         intent: detail.intent,
         branches: detail.branches,
       })),
-      eval: data.eval ?? 0 // ✅ DB의 eval 값이 여기로 들어오는지 확인
+      eval: data.eval ?? 0
     };
+  }, [moveState.fen]);
+
+  // ✅ 보드 터치 핸들러: 이동 후 결과 국면의 type을 확인하여 아이콘 표시
+  const onSquarePress = (sq: Square) => {
+    setMoveState((prev) => {
+      const next = handleSquarePress(prev, sq);
+
+      // 수가 실제로 두어졌을 때만 로직 실행
+      if (next.moveHistory.length > prev.moveHistory.length) {
+        // 1. 이동 후의 FEN으로 데이터 검색
+        const nextData = getEntryByFen(next.fen);
+
+        // 2. 결과 국면에 type이 정의되어 있다면 아이콘 표시
+        if (nextData && nextData.type) {
+          setLastMoveEval({ type: nextData.type, toSq: sq });
+        } else {
+          setLastMoveEval(null);
+        }
+      }
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    // 무르기나 초기화 시 아이콘 제거
+    if (moveState.moveHistory.length === 0) setLastMoveEval(null);
   }, [moveState.fen]);
 
   const evalDisplay = useMemo(() => {
@@ -82,7 +106,6 @@ export default function Index() {
     return val > 0 ? `+${val.toFixed(1)}` : val.toFixed(1);
   }, [openingInfo.eval]);
 
-  // 게임 상태 계산
   const checkInfo = useMemo(() => {
     const { pieces, turn } = moveState;
     const kingSq = findKingSquare(pieces, turn);
@@ -101,7 +124,7 @@ export default function Index() {
     return { inCheck, checkmated: inCheck && !hasMoves, isStalemate: !inCheck && !hasMoves, kingSquare: kingSq };
   }, [moveState]);
 
-  // 소리 재생
+  // 사운드 관련 로직 생략 (기존 유지)
   const movePlayer = useAudioPlayer(require('../assets/sfx/move.wav'));
   const capturePlayer = useAudioPlayer(require('../assets/sfx/capture.wav'));
   const castlingPlayer = useAudioPlayer(require('../assets/sfx/castling.wav'));
@@ -114,11 +137,10 @@ export default function Index() {
   };
 
   const prevMoveCount = useRef(moveState.moveHistory.length);
-
   useEffect(() => {
-    const currentCount = moveState.moveHistory.length;
-    if (currentCount > prevMoveCount.current) {
-      const lastMove = moveState.moveHistory[currentCount - 1];
+    const count = moveState.moveHistory.length;
+    if (count > prevMoveCount.current) {
+      const lastMove = moveState.moveHistory[count - 1];
       if (checkInfo.checkmated || checkInfo.isStalemate) playSound('gameover');
       else if (checkInfo.inCheck) playSound('check');
       else if (lastMove.san.includes('O-O')) playSound('castling');
@@ -126,7 +148,7 @@ export default function Index() {
       else playSound('move');
       setTimeout(() => { scrollRef.current?.scrollToEnd({ animated: true }); }, 100);
     }
-    prevMoveCount.current = currentCount;
+    prevMoveCount.current = count;
   }, [moveState.moveHistory.length, checkInfo]);
 
   const grouped = useMemo(() => {
@@ -138,27 +160,6 @@ export default function Index() {
     return Array.from(map.entries());
   }, [moveState.moveHistory]);
 
-  const handleSelectMove = (moveSan: string, item: RecommendationItem) => {
-    // 1. 실제 수를 둠 (기존 로직)
-    const nextState = handleSquarePress(moveState, /* SAN을 좌표로 바꾸는 로직 필요하지만 일단 생략 */ null); // *중요: 실제로는 여기 복잡한 로직이 필요함.
-
-    // ⚠️ 간소화를 위해, 실제 움직임 로직 대신 개념만 보여드립니다.
-    // 실제로는 chess.js 등을 통해 SAN(e4)을 출발/도착지(e2, e4)로 변환해야 합니다.
-    // 여기서는 예시로 'e4'가 도착지라고 가정하고 상태만 업데이트합니다.
-
-    // 임시 구현: 실제 게임 로직에 맞춰 수정 필요
-    const mockToSquare = moveSan.replace("+", "").replace("#", "").slice(-2) as Square; // 대략적인 도착지 추정
-
-    setMoveState(nextState); // 보드 업데이트
-
-    // 2. [추가] 마지막 수의 평가 타입과 도착지 저장
-    setLastMoveEval({ type: it.type, toSq: mockToSquare });
-  };
-
-  useEffect(() => {
-    setLastMoveEval(null);
-  }, [moveState.fen]); // FEN이 바뀌면 초기화
-
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.container}>
@@ -168,7 +169,7 @@ export default function Index() {
           pieces={moveState.pieces}
           selectedSquare={moveState.selected}
           legalMoves={moveState.legalMoves}
-          onSquarePress={(sq) => setMoveState((prev) => handleSquarePress(prev, sq))}
+          onSquarePress={onSquarePress}
           checkState={{
             inCheck: checkInfo.inCheck,
             checkmated: checkInfo.checkmated,
@@ -179,7 +180,6 @@ export default function Index() {
 
         <EvalBar value={openingInfo.eval} />
 
-        {/* ✅ [추가] 기보 섹션 상단 오프닝 타이틀 영역 */}
         <View style={styles.openingHeader}>
           <Text style={styles.openingKoText}>{openingInfo.name}</Text>
           <Text style={styles.openingEnText}>{openingInfo.enName}</Text>
@@ -220,8 +220,8 @@ export default function Index() {
           <Recommendations
             items={openingInfo.recommendations}
             height={200}
-            onSelectMove={handleSelectMove}
-            onSelectBranch={(branch, parent) => console.log(`[${parent.move}] 분기: ${branch}`)}
+            onSelectMove={(move) => console.log("Move selected:", move)}
+            onSelectBranch={(branch, parent) => console.log(`[${parent.move}] Branch: ${branch}`)}
           />
         </View>
       </View>
@@ -232,12 +232,9 @@ export default function Index() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: "#0B0F14" },
   container: { flex: 1, alignItems: "center", paddingHorizontal: 16, paddingTop: 16, gap: 16 },
-
-  // ✅ 오프닝 타이틀 스타일
   openingHeader: { width: "100%", maxWidth: 360, marginBottom: -8 },
   openingKoText: { fontSize: 18, fontWeight: "800", color: "#E7EDF5" },
   openingEnText: { fontSize: 13, fontWeight: "500", color: "rgba(231,237,245,0.4)", marginTop: 2 },
-
   timelineSection: { width: "100%", height: 44, backgroundColor: "rgba(255,255,255,0.05)", borderRadius: 8, overflow: "hidden" },
   timelineContent: { paddingHorizontal: 12, alignItems: "center", gap: 12 },
   plyChip: { flexDirection: "row", alignItems: "center", backgroundColor: "rgba(255,255,255,0.08)", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, gap: 6 },
