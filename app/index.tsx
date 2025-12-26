@@ -8,7 +8,6 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Dimensions, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-// ✅ 오프닝 데이터 임포트
 import openingData from "@/scripts/opening.json";
 
 import {
@@ -27,8 +26,6 @@ export default function Index() {
   );
 
   const scrollRef = useRef<ScrollView>(null);
-
-  // 평가치 바 (DB 연동 전까지 0 유지)
   const [evalValue] = useState<number>(0);
 
   const boardSize = useMemo(() => {
@@ -39,14 +36,11 @@ export default function Index() {
   const canUndo = moveState.past.length > 0;
   const canRedo = moveState.future.length > 0;
 
-  // ✅ [수정] FEN을 기반으로 현재 오프닝 정보와 추천 수 찾기
+  // ✅ [수정] FEN 기반 오프닝 및 분기(Branches) 추출
   const openingInfo = useMemo(() => {
     const currentFen = moveState.fen;
-
-    // 1. 전체 FEN 일치 확인 (halfmove, fullmove 포함)
     let data = (openingData as any)[currentFen];
 
-    // 2. 일치하는 게 없다면, 무브 카운터를 제외한 '기본 FEN(Base FEN)'으로 재검색 (전치 방지)
     if (!data) {
       const baseFen = currentFen.split(' ').slice(0, 4).join(' ');
       const foundKey = Object.keys(openingData).find(key => key.startsWith(baseFen));
@@ -55,11 +49,11 @@ export default function Index() {
 
     if (!data) return { name: "알 수 없는 오프닝", recommendations: [] };
 
-    // RecommendationItem 형식으로 변환
     const recs: RecommendationItem[] = Object.entries(data.moves).map(([move, detail]: [string, any]) => ({
       move,
       type: detail.type,
       intent: detail.intent,
+      branches: detail.branches, // ✅ DB에 추가된 branch 데이터 연동
     }));
 
     return {
@@ -68,7 +62,7 @@ export default function Index() {
     };
   }, [moveState.fen]);
 
-  // ✅ 실시간 게임 상태 계산 (체크/메이트)
+  // 실시간 게임 상태 계산
   const checkInfo = useMemo(() => {
     const { pieces, turn } = moveState;
     const kingSq = findKingSquare(pieces, turn);
@@ -84,13 +78,10 @@ export default function Index() {
         }
       }
     }
-    const isCheckmate = inCheck && !hasMoves;
-    const isStalemate = !inCheck && !hasMoves;
-
-    return { inCheck, checkmated: isCheckmate, isStalemate, kingSquare: kingSq };
+    return { inCheck, checkmated: inCheck && !hasMoves, isStalemate: !inCheck && !hasMoves, kingSquare: kingSq };
   }, [moveState]);
 
-  // ✅ 소리 재생
+  // 소리 재생
   const movePlayer = useAudioPlayer(require('../assets/sfx/move.wav'));
   const capturePlayer = useAudioPlayer(require('../assets/sfx/capture.wav'));
   const castlingPlayer = useAudioPlayer(require('../assets/sfx/castling.wav'));
@@ -113,13 +104,11 @@ export default function Index() {
       else if (lastMove.san.includes('O-O')) playSound('castling');
       else if (lastMove.san.includes('x')) playSound('capture');
       else playSound('move');
-
       setTimeout(() => { scrollRef.current?.scrollToEnd({ animated: true }); }, 100);
     }
     prevMoveCount.current = currentCount;
   }, [moveState.moveHistory.length, checkInfo]);
 
-  // 기보 그룹화
   const grouped = useMemo(() => {
     const map = new Map<number, string[]>();
     for (const m of moveState.moveHistory) {
@@ -178,7 +167,6 @@ export default function Index() {
           </Pressable>
         </View>
 
-        {/* ✅ [수정] 오프닝 이름과 추천 수 표시 */}
         <View style={styles.section}>
           <View style={styles.titleRow}>
             <Text style={styles.sectionTitle}>추천 수</Text>
@@ -187,8 +175,10 @@ export default function Index() {
           <Recommendations
             items={openingInfo.recommendations}
             height={200}
-            onSelectMove={(move) => console.log("select:", move)}
-            onSelectBranch={(b) => console.log("select:", b)}
+            // ✅ 추천 수 클릭 시 로그
+            onSelectMove={(move) => console.log("추천 수 선택됨:", move)}
+            // ✅ 분기(Branch) 클릭 시 로그
+            onSelectBranch={(branch, parent) => console.log(`[${parent.move}]의 분기 선택됨: ${branch}`)}
           />
         </View>
       </View>
