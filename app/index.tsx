@@ -48,8 +48,8 @@ export default function Index() {
     const data = foundKey ? (openingData as any)[foundKey] : null;
 
     // 로그로 데이터가 찍히는지 확인
-    console.log(`[Debug] Current Base: ${currentBase}`);
-    console.log(`[Debug] Found Data:`, data);
+    // console.log(`[Debug] Current Base: ${currentBase}`);
+    // console.log(`[Debug] Found Data:`, data);
 
     if (!data) {
       return { name: "알 수 없는 오프닝", enName: "Unknown", recommendations: [], eval: 0 };
