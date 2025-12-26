@@ -1,7 +1,6 @@
 import { Image } from "expo-image";
 import React, { useMemo } from "react";
 import { Pressable, Image as RNImage, StyleSheet, View } from "react-native";
-// ✅ Icons 임포트
 import { EvalType, MOVE_ICONS } from "./Icons";
 
 /* ===== Types ===== */
@@ -45,7 +44,6 @@ type Props = {
     legalMoves?: Square[];
     onSquarePress?: (square: Square) => void;
     checkState?: { inCheck?: boolean; checkmated?: boolean; kingSquare?: Square | null };
-    // ✅ 마지막 수 평가 정보 Prop 추가
     lastMoveEval?: { type: EvalType, toSq: Square } | null;
 };
 
@@ -53,8 +51,8 @@ export default function ChessBoard({
     size, pieces = INITIAL_PIECES, orientation = "white",
     selectedSquare, legalMoves, onSquarePress, checkState, lastMoveEval
 }: Props) {
-    const square = Math.floor(size / 8);
-    const boardSize = square * 8;
+    const squareSize = Math.floor(size / 8);
+    const boardSize = squareSize * 8;
     const rows = useMemo(() => Array.from({ length: 8 }, (_, i) => i), []);
     const cols = useMemo(() => Array.from({ length: 8 }, (_, i) => i), []);
 
@@ -79,8 +77,7 @@ export default function ChessBoard({
                                 const isCheckmate = checkState?.checkmated && squareName === checkState.kingSquare;
 
                                 // ✅ 아이콘 표시 여부 확인
-                                const isEvalSquare = lastMoveEval?.toSq === squareName;
-                                const EvalIcon = isEvalSquare ? MOVE_ICONS[lastMoveEval!.type] : null;
+                                const evalSource = lastMoveEval?.toSq === squareName ? MOVE_ICONS[lastMoveEval.type] : null;
 
                                 return (
                                     <Pressable
@@ -89,7 +86,7 @@ export default function ChessBoard({
                                         style={[
                                             styles.square,
                                             {
-                                                width: square, height: square,
+                                                width: squareSize, height: squareSize,
                                                 backgroundColor: isLight ? "#EADDCB" : "#B58863",
                                                 ...(isSelected && { backgroundColor: "#E6C36A" }),
                                                 ...(isKingInCheck && { backgroundColor: "#EF4444" }),
@@ -103,16 +100,17 @@ export default function ChessBoard({
                                         {piece && (
                                             <RNImage
                                                 source={PIECE_IMAGES[piece.color][piece.piece]}
-                                                style={{ width: square * 0.9, height: square * 0.9 }}
+                                                style={{ width: squareSize * 0.9, height: squareSize * 0.9 }}
                                                 resizeMode="contain"
                                             />
                                         )}
 
-                                        {/* ✅ 평가 아이콘 (체크메이트 아이콘과 위치 동일) */}
-                                        {EvalIcon && (
-                                            <View style={styles.evalIconWrapper}>
-                                                <EvalIcon width={16} height={16} />
-                                            </View>
+                                        {/* ✅ 평가 아이콘 (체크메이트 로직과 동일하게 Image로 렌더링) */}
+                                        {evalSource && (
+                                            <Image
+                                                source={evalSource}
+                                                style={styles.evalIcon}
+                                            />
                                         )}
 
                                         {isCheckmate && (
@@ -142,6 +140,6 @@ const styles = StyleSheet.create({
     legalDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: "rgba(0,0,0,0.35)" },
     legalRing: { width: 18, height: 18, borderRadius: 9, borderWidth: 2, borderColor: "rgba(0,0,0,0.35)", position: "absolute" },
     checkmateIcon: { position: "absolute", top: 2, right: 2, width: 16, height: 16, zIndex: 10 },
-    // ✅ 평가 아이콘 오버레이 스타일
     evalIconWrapper: { position: "absolute", top: 2, right: 2, zIndex: 11 },
+    evalIcon: { position: "absolute", top: 2, right: 2, width: 16, height: 16, zIndex: 11 },
 });

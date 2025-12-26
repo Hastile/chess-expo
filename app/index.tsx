@@ -39,7 +39,7 @@ export default function Index() {
   const canUndo = moveState.past.length > 0;
   const canRedo = moveState.future.length > 0;
 
-  // ✅ FEN 매칭 헬퍼 함수 (앞 3마디 기준)
+  // ✅ FEN 매칭 헬퍼 (캐슬링 권한까지만 비교)
   const getEntryByFen = (fen: string) => {
     const base = fen.split(' ').slice(0, 3).join(' ');
     const foundKey = Object.keys(openingData).find(key =>
@@ -50,10 +50,7 @@ export default function Index() {
 
   const openingInfo = useMemo(() => {
     const data = getEntryByFen(moveState.fen);
-
-    if (!data) {
-      return { name: "알 수 없는 오프닝", enName: "Unknown", recommendations: [], eval: 0 };
-    }
+    if (!data) return { name: "알 수 없는 오프닝", enName: "Unknown", recommendations: [], eval: 0 };
 
     return {
       name: data.name?.ko || "이름 없음",
@@ -68,31 +65,37 @@ export default function Index() {
     };
   }, [moveState.fen]);
 
-  // ✅ 보드 터치 핸들러: 이동 후 결과 국면의 type을 확인하여 아이콘 표시
+  // ✅ 보드 터치 핸들러: 이동 전 추천수와 대조하여 아이콘 표시
   const onSquarePress = (sq: Square) => {
-    setMoveState((prev) => {
-      const next = handleSquarePress(prev, sq);
+    // 1. 현재 추천수 목록 캡처 (이동 전 상태 기준)
+    const currentRecs = openingInfo.recommendations;
 
-      // 수가 실제로 두어졌는지 확인 (기보 기록 증가)
-      if (next.moveHistory.length > prev.moveHistory.length) {
-        // 1. 이동 후 도달한 국면(FEN)의 데이터를 가져옴
-        const nextData = getEntryByFen(next.fen);
+    // 2. 실제 이동 처리
+    const next = handleSquarePress(moveState, sq);
 
-        // 2. 해당 국면에 'type'이 정의되어 있다면 아이콘 상태 업데이트
-        if (nextData && nextData.type) {
-          setLastMoveEval({ type: nextData.type as EvalType, toSq: sq });
-        } else {
-          setLastMoveEval(null);
-        }
+    // 3. 이동 성공 시 (기보가 늘어났을 때) 아이콘 업데이트
+    if (next.moveHistory.length > moveState.moveHistory.length) {
+      const lastMove = next.moveHistory[next.moveHistory.length - 1];
+
+      // ✅ 흑의 수 접두사 "... " 제거 후 DB의 move 키값과 대조
+      const cleanSan = lastMove.san.replace("... ", "");
+      const matched = currentRecs.find(r => r.move === cleanSan);
+
+      if (matched) {
+        // 도착 칸인 sq에 아이콘 정보 저장
+        setLastMoveEval({ type: matched.type as EvalType, toSq: sq });
+      } else {
+        setLastMoveEval(null);
       }
-      return next;
-    });
+    }
+
+    setMoveState(next);
   };
 
-  // ✅ 기보가 바뀌면 (Undo 등) 아이콘 초기화
-  useEffect(() => {
-    if (moveState.moveHistory.length === 0) setLastMoveEval(null);
-  }, [moveState.fen]);
+  // ✅ 무르기, 다시하기, 리셋 시 아이콘 초기화
+  const handleUndo = () => { setMoveState(s => undo(s)); setLastMoveEval(null); };
+  const handleRedo = () => { setMoveState(s => redo(s)); setLastMoveEval(null); };
+  const handleReset = () => { setMoveState(resetGame(INITIAL_PIECES)); setLastMoveEval(null); };
 
   const evalDisplay = useMemo(() => {
     const val = openingInfo.eval;
@@ -109,22 +112,17 @@ export default function Index() {
   const checkInfo = useMemo(() => {
     const { pieces, turn } = moveState;
     const kingSq = findKingSquare(pieces, turn);
-    const enemy = opposite(turn);
-    const inCheck = kingSq ? isSquareAttacked(pieces, kingSq, enemy) : false;
-
+    const inCheck = kingSq ? isSquareAttacked(pieces, kingSq, opposite(turn)) : false;
     let hasMoves = false;
     for (const sq in pieces) {
       if (pieces[sq as Square]?.color === turn) {
-        if (getLegalMoves(moveState, sq as Square).length > 0) {
-          hasMoves = true;
-          break;
-        }
+        if (getLegalMoves(moveState, sq as Square).length > 0) { hasMoves = true; break; }
       }
     }
     return { inCheck, checkmated: inCheck && !hasMoves, isStalemate: !inCheck && !hasMoves, kingSquare: kingSq };
   }, [moveState]);
 
-  // 사운드 재생 로직 (기존 유지)
+  // 사운드 관련 로직 생략 (기존 유지)
   const movePlayer = useAudioPlayer(require('../assets/sfx/move.wav'));
   const capturePlayer = useAudioPlayer(require('../assets/sfx/capture.wav'));
   const castlingPlayer = useAudioPlayer(require('../assets/sfx/castling.wav'));
@@ -138,9 +136,9 @@ export default function Index() {
 
   const prevMoveCount = useRef(moveState.moveHistory.length);
   useEffect(() => {
-    const count = moveState.moveHistory.length;
-    if (count > prevMoveCount.current) {
-      const lastMove = moveState.moveHistory[count - 1];
+    const currentCount = moveState.moveHistory.length;
+    if (currentCount > prevMoveCount.current) {
+      const lastMove = moveState.moveHistory[currentCount - 1];
       if (checkInfo.checkmated || checkInfo.isStalemate) playSound('gameover');
       else if (checkInfo.inCheck) playSound('check');
       else if (lastMove.san.includes('O-O')) playSound('castling');
@@ -148,7 +146,7 @@ export default function Index() {
       else playSound('move');
       setTimeout(() => { scrollRef.current?.scrollToEnd({ animated: true }); }, 100);
     }
-    prevMoveCount.current = count;
+    prevMoveCount.current = currentCount;
   }, [moveState.moveHistory.length, checkInfo]);
 
   const grouped = useMemo(() => {
@@ -169,13 +167,13 @@ export default function Index() {
           pieces={moveState.pieces}
           selectedSquare={moveState.selected}
           legalMoves={moveState.legalMoves}
-          onSquarePress={onSquarePress} // ✅ 수정된 핸들러 연결
+          onSquarePress={onSquarePress}
           checkState={{
             inCheck: checkInfo.inCheck,
             checkmated: checkInfo.checkmated,
             kingSquare: checkInfo.kingSquare
           }}
-          lastMoveEval={lastMoveEval} // ✅ 아이콘 정보 전달
+          lastMoveEval={lastMoveEval}
         />
 
         <EvalBar value={openingInfo.eval} />
@@ -197,15 +195,15 @@ export default function Index() {
         </View>
 
         <View style={styles.actionsRow}>
-          <Pressable disabled={!canUndo} onPress={() => setMoveState((s) => undo(s))} style={[styles.actionButton, !canUndo && styles.actionDisabled]}>
+          <Pressable disabled={!canUndo} onPress={handleUndo} style={[styles.actionButton, !canUndo && styles.actionDisabled]}>
             <Text style={styles.actionIcon}>↩️</Text>
             <Text style={styles.actionLabel}>Undo</Text>
           </Pressable>
-          <Pressable disabled={!canRedo} onPress={() => setMoveState((s) => redo(s))} style={[styles.actionButton, !canRedo && styles.actionDisabled]}>
+          <Pressable disabled={!canRedo} onPress={handleRedo} style={[styles.actionButton, !canRedo && styles.actionDisabled]}>
             <Text style={styles.actionIcon}>↪️</Text>
             <Text style={styles.actionLabel}>Redo</Text>
           </Pressable>
-          <Pressable onPress={() => setMoveState(resetGame(INITIAL_PIECES))} style={styles.actionButton}>
+          <Pressable onPress={handleReset} style={styles.actionButton}>
             <Text style={styles.actionIcon}>🔄</Text>
             <Text style={styles.actionLabel}>Reset</Text>
           </Pressable>
@@ -220,7 +218,7 @@ export default function Index() {
           <Recommendations
             items={openingInfo.recommendations}
             height={200}
-            onSelectMove={(move) => console.log(`선택됨: ${move}`)}
+            onSelectMove={(move) => console.log("추천수:", move)}
             onSelectBranch={(branch, parent) => console.log(`[${parent.move}] 분기: ${branch}`)}
           />
         </View>

@@ -6,7 +6,6 @@
             "en": "Starting Position"
         },
         "eval": 0.0,
-        "type": "",
         "moves": {
             "e4": {
                 "type": "book",
@@ -35,7 +34,6 @@
             "en": "King's Pawn Opening"
         },
         "eval": 0.2,
-        "type": "book",
         "moves": {
             "e5": {
                 "type": "book",
