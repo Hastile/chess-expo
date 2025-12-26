@@ -17,6 +17,7 @@ export type RecommendationItem = {
     id?: string;         // optional (DB id)
     move: string;        // e.g. "d6", "O-O"
     type: EvalType;
+    intent?: string;     // ✅ 설명 추가
     branches?: string[]; // e.g. ["Najdorf", "Dragon", ...]
 };
 
@@ -80,9 +81,17 @@ export default function Recommendations({
                                     >
                                         <View style={[styles.indicator, { backgroundColor: meta.color }]} />
 
-                                        <Text style={styles.moveText} numberOfLines={1}>
-                                            {it.move}
-                                        </Text>
+                                        {/* ✅ 텍스트 영역: Move와 Intent를 가로로 배치 */}
+                                        <View style={styles.textContainer}>
+                                            <Text style={styles.moveText} numberOfLines={1}>
+                                                {it.move}
+                                            </Text>
+                                            {it.intent && (
+                                                <Text style={styles.intentText} numberOfLines={1}>
+                                                    {it.intent.replace(/\n/g, " ")}
+                                                </Text>
+                                            )}
+                                        </View>
 
                                         <Text style={[styles.evalText, { color: meta.color }]} numberOfLines={1}>
                                             {meta.label}
@@ -160,16 +169,31 @@ const styles = StyleSheet.create({
 
     indicator: {
         width: 4,
-        height: 28, // ✅ 통일
+        height: 28,
         borderRadius: 2,
         marginRight: 8,
     },
 
-    moveText: {
+    // ✅ Move와 Intent를 감싸는 컨테이너
+    textContainer: {
         flex: 1,
+        flexDirection: "row",
+        alignItems: "baseline",
+    },
+
+    moveText: {
         fontSize: 15,
         fontWeight: "700",
         color: "#E7EDF5",
+    },
+
+    // ✅ 의도(Intent) 텍스트 스타일: 폰트 크기를 줄이고 투명도를 높임
+    intentText: {
+        flex: 1,
+        marginLeft: 8,
+        fontSize: 12,
+        color: "rgba(231,237,245,0.45)",
+        fontWeight: "500",
     },
 
     evalText: {
