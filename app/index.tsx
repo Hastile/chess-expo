@@ -3,11 +3,13 @@ import EvalBar from "@/components/EvalBar";
 import Recommendations, { RecommendationItem } from "@/components/Recommendations";
 import { findKingSquare, getLegalMoves, isSquareAttacked, opposite } from "@/scripts/Piece";
 
+import { useAudioPlayer } from "expo-audio";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Dimensions, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-// ✅ expo-av 대신 expo-audio 임포트
-import { useAudioPlayer } from "expo-audio";
+
+// ✅ 오프닝 데이터 임포트
+import openingData from "@/scripts/opening.json";
 
 import {
   createInitialState,
@@ -26,9 +28,8 @@ export default function Index() {
 
   const scrollRef = useRef<ScrollView>(null);
 
-  // DB 연결 대비 (지금은 비워둠)
+  // 평가치 바 (DB 연동 전까지 0 유지)
   const [evalValue] = useState<number>(0);
-  const [recommendations] = useState<RecommendationItem[]>([]);
 
   const boardSize = useMemo(() => {
     const w = Dimensions.get("window").width;
@@ -38,7 +39,36 @@ export default function Index() {
   const canUndo = moveState.past.length > 0;
   const canRedo = moveState.future.length > 0;
 
-  // ✅ 실시간 게임 상태 계산
+  // ✅ [수정] FEN을 기반으로 현재 오프닝 정보와 추천 수 찾기
+  const openingInfo = useMemo(() => {
+    const currentFen = moveState.fen;
+
+    // 1. 전체 FEN 일치 확인 (halfmove, fullmove 포함)
+    let data = (openingData as any)[currentFen];
+
+    // 2. 일치하는 게 없다면, 무브 카운터를 제외한 '기본 FEN(Base FEN)'으로 재검색 (전치 방지)
+    if (!data) {
+      const baseFen = currentFen.split(' ').slice(0, 4).join(' ');
+      const foundKey = Object.keys(openingData).find(key => key.startsWith(baseFen));
+      if (foundKey) data = (openingData as any)[foundKey];
+    }
+
+    if (!data) return { name: "알 수 없는 오프닝", recommendations: [] };
+
+    // RecommendationItem 형식으로 변환
+    const recs: RecommendationItem[] = Object.entries(data.moves).map(([move, detail]: [string, any]) => ({
+      move,
+      type: detail.type,
+      intent: detail.intent,
+    }));
+
+    return {
+      name: data.name.ko,
+      recommendations: recs
+    };
+  }, [moveState.fen]);
+
+  // ✅ 실시간 게임 상태 계산 (체크/메이트)
   const checkInfo = useMemo(() => {
     const { pieces, turn } = moveState;
     const kingSq = findKingSquare(pieces, turn);
@@ -54,37 +84,22 @@ export default function Index() {
         }
       }
     }
-
     const isCheckmate = inCheck && !hasMoves;
     const isStalemate = !inCheck && !hasMoves;
 
     return { inCheck, checkmated: isCheckmate, isStalemate, kingSquare: kingSq };
   }, [moveState]);
 
-  // ✅ [수정] expo-audio 방식의 소리 재생 로직
-  // useAudioPlayer는 리소스를 로드하고 자동으로 플레이어 인스턴스를 관리합니다.
+  // ✅ 소리 재생
   const movePlayer = useAudioPlayer(require('../assets/sfx/move.wav'));
   const capturePlayer = useAudioPlayer(require('../assets/sfx/capture.wav'));
   const castlingPlayer = useAudioPlayer(require('../assets/sfx/castling.wav'));
   const checkPlayer = useAudioPlayer(require('../assets/sfx/check.wav'));
   const gameoverPlayer = useAudioPlayer(require('../assets/sfx/gameover.wav'));
 
-  const players = {
-    move: movePlayer,
-    capture: capturePlayer,
-    castling: castlingPlayer,
-    check: checkPlayer,
-    gameover: gameoverPlayer,
-  };
-
-  // 소리 재생 함수 (기존보다 훨씬 가볍고 빠릅니다)
-  const playSound = (type: keyof typeof players) => {
-    const player = players[type];
-    if (player) {
-      // expo-audio는 재생 후 끝에 멈춰 있으므로 처음으로 되돌린 후 재생합니다.
-      player.seekTo(0);
-      player.play();
-    }
+  const playSound = (type: string) => {
+    const p = { move: movePlayer, capture: capturePlayer, castling: castlingPlayer, check: checkPlayer, gameover: gameoverPlayer }[type];
+    if (p) { p.seekTo(0); p.play(); }
   };
 
   const prevMoveCount = useRef(moveState.moveHistory.length);
@@ -93,27 +108,18 @@ export default function Index() {
     const currentCount = moveState.moveHistory.length;
     if (currentCount > prevMoveCount.current) {
       const lastMove = moveState.moveHistory[currentCount - 1];
+      if (checkInfo.checkmated || checkInfo.isStalemate) playSound('gameover');
+      else if (checkInfo.inCheck) playSound('check');
+      else if (lastMove.san.includes('O-O')) playSound('castling');
+      else if (lastMove.san.includes('x')) playSound('capture');
+      else playSound('move');
 
-      if (checkInfo.checkmated || checkInfo.isStalemate) {
-        playSound('gameover');
-      } else if (checkInfo.inCheck) {
-        playSound('check');
-      } else if (lastMove.san.includes('O-O')) {
-        playSound('castling');
-      } else if (lastMove.san.includes('x')) {
-        playSound('capture');
-      } else {
-        playSound('move');
-      }
-
-      setTimeout(() => {
-        scrollRef.current?.scrollToEnd({ animated: true });
-      }, 100);
+      setTimeout(() => { scrollRef.current?.scrollToEnd({ animated: true }); }, 100);
     }
     prevMoveCount.current = currentCount;
   }, [moveState.moveHistory.length, checkInfo]);
 
-  // 기보 그룹화 로직 (이하 동일)
+  // 기보 그룹화
   const grouped = useMemo(() => {
     const map = new Map<number, string[]>();
     for (const m of moveState.moveHistory) {
@@ -132,9 +138,7 @@ export default function Index() {
           pieces={moveState.pieces}
           selectedSquare={moveState.selected}
           legalMoves={moveState.legalMoves}
-          onSquarePress={(sq) =>
-            setMoveState((prev) => handleSquarePress(prev, sq))
-          }
+          onSquarePress={(sq) => setMoveState((prev) => handleSquarePress(prev, sq))}
           checkState={{
             inCheck: checkInfo.inCheck,
             checkmated: checkInfo.checkmated,
@@ -174,9 +178,18 @@ export default function Index() {
           </Pressable>
         </View>
 
+        {/* ✅ [수정] 오프닝 이름과 추천 수 표시 */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>추천 수</Text>
-          <Recommendations items={recommendations} height={220} onSelectMove={(move) => console.log("select:", move)} onSelectBranch={(b) => console.log("select:", b)} />
+          <View style={styles.titleRow}>
+            <Text style={styles.sectionTitle}>추천 수</Text>
+            <Text style={styles.openingName}>{openingInfo.name}</Text>
+          </View>
+          <Recommendations
+            items={openingInfo.recommendations}
+            height={200}
+            onSelectMove={(move) => console.log("select:", move)}
+            onSelectBranch={(b) => console.log("select:", b)}
+          />
         </View>
       </View>
     </SafeAreaView>
@@ -197,5 +210,7 @@ const styles = StyleSheet.create({
   actionIcon: { fontSize: 22, lineHeight: 26 },
   actionLabel: { fontSize: 12, color: "rgba(231,237,245,0.8)" },
   section: { width: "100%", maxWidth: 360, gap: 8 },
+  titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   sectionTitle: { fontSize: 14, fontWeight: "600", color: "#E7EDF5" },
+  openingName: { fontSize: 12, color: "rgba(231,237,245,0.5)", fontWeight: "500" },
 });
