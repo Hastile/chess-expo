@@ -1,0 +1,19 @@
+{
+    "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1": {
+        "id": "start",
+        "name": {
+            "ko": "체스 시작",
+            "en": "Starting Position"
+        },
+        "moves": {
+            "e4": {
+                "type": "book",
+                "intent": "킹즈 폰 오프닝 :\n중앙을 차지하고 어두운 비숍 길을 염"
+            },
+            "d4": {
+                "type": "book",
+                "intent": "퀸즈 폰 오프닝 :\n중앙을 차지하고 밝은 비숍 길을 염"
+            }
+        }
+    }
+}
