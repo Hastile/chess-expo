@@ -5,6 +5,7 @@
             "ko": "체스 시작",
             "en": "Starting Position"
         },
+        "eval": 0.0,
         "moves": {
             "e4": {
                 "type": "book",

@@ -36,7 +36,7 @@ export default function Index() {
   const canUndo = moveState.past.length > 0;
   const canRedo = moveState.future.length > 0;
 
-  // ✅ [수정] FEN 기반 오프닝 및 분기(Branches) 추출
+  // ✅ 오프닝 정보 추출 (한글/영어 이름 포함)
   const openingInfo = useMemo(() => {
     const currentFen = moveState.fen;
     let data = (openingData as any)[currentFen];
@@ -47,22 +47,23 @@ export default function Index() {
       if (foundKey) data = (openingData as any)[foundKey];
     }
 
-    if (!data) return { name: "알 수 없는 오프닝", recommendations: [] };
+    if (!data) return { name: "알 수 없는 오프닝", enName: "Unknown Opening", recommendations: [] };
 
     const recs: RecommendationItem[] = Object.entries(data.moves).map(([move, detail]: [string, any]) => ({
       move,
       type: detail.type,
       intent: detail.intent,
-      branches: detail.branches, // ✅ DB에 추가된 branch 데이터 연동
+      branches: detail.branches,
     }));
 
     return {
-      name: data.name.ko,
+      name: data.name.ko,    // 한국어 이름
+      enName: data.name.en,  // 영어 이름
       recommendations: recs
     };
   }, [moveState.fen]);
 
-  // 실시간 게임 상태 계산
+  // 게임 상태 계산
   const checkInfo = useMemo(() => {
     const { pieces, turn } = moveState;
     const kingSq = findKingSquare(pieces, turn);
@@ -137,6 +138,12 @@ export default function Index() {
 
         <EvalBar value={evalValue} />
 
+        {/* ✅ [추가] 기보 섹션 상단 오프닝 타이틀 영역 */}
+        <View style={styles.openingHeader}>
+          <Text style={styles.openingKoText}>{openingInfo.name}</Text>
+          <Text style={styles.openingEnText}>{openingInfo.enName}</Text>
+        </View>
+
         <View style={styles.timelineSection}>
           <ScrollView ref={scrollRef} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.timelineContent}>
             {grouped.map(([ply, moves]) => (
@@ -168,17 +175,12 @@ export default function Index() {
         </View>
 
         <View style={styles.section}>
-          <View style={styles.titleRow}>
-            <Text style={styles.sectionTitle}>추천 수</Text>
-            <Text style={styles.openingName}>{openingInfo.name}</Text>
-          </View>
+          <Text style={styles.sectionTitle}>추천 수</Text>
           <Recommendations
             items={openingInfo.recommendations}
             height={200}
-            // ✅ 추천 수 클릭 시 로그
-            onSelectMove={(move) => console.log("추천 수 선택됨:", move)}
-            // ✅ 분기(Branch) 클릭 시 로그
-            onSelectBranch={(branch, parent) => console.log(`[${parent.move}]의 분기 선택됨: ${branch}`)}
+            onSelectMove={(move) => console.log("선택:", move)}
+            onSelectBranch={(branch, parent) => console.log(`[${parent.move}] 분기: ${branch}`)}
           />
         </View>
       </View>
@@ -189,6 +191,12 @@ export default function Index() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: "#0B0F14" },
   container: { flex: 1, alignItems: "center", paddingHorizontal: 16, paddingTop: 16, gap: 16 },
+
+  // ✅ 오프닝 타이틀 스타일
+  openingHeader: { width: "100%", maxWidth: 360, marginBottom: -8 },
+  openingKoText: { fontSize: 18, fontWeight: "800", color: "#E7EDF5" },
+  openingEnText: { fontSize: 13, fontWeight: "500", color: "rgba(231,237,245,0.4)", marginTop: 2 },
+
   timelineSection: { width: "100%", height: 44, backgroundColor: "rgba(255,255,255,0.05)", borderRadius: 8, overflow: "hidden" },
   timelineContent: { paddingHorizontal: 12, alignItems: "center", gap: 12 },
   plyChip: { flexDirection: "row", alignItems: "center", backgroundColor: "rgba(255,255,255,0.08)", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, gap: 6 },
@@ -200,7 +208,5 @@ const styles = StyleSheet.create({
   actionIcon: { fontSize: 22, lineHeight: 26 },
   actionLabel: { fontSize: 12, color: "rgba(231,237,245,0.8)" },
   section: { width: "100%", maxWidth: 360, gap: 8 },
-  titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   sectionTitle: { fontSize: 14, fontWeight: "600", color: "#E7EDF5" },
-  openingName: { fontSize: 12, color: "rgba(231,237,245,0.5)", fontWeight: "500" },
 });
