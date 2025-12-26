@@ -3,10 +3,11 @@ import EvalBar from "@/components/EvalBar";
 import Recommendations, { RecommendationItem } from "@/components/Recommendations";
 import { findKingSquare, getLegalMoves, isSquareAttacked, opposite } from "@/scripts/Piece";
 
-import { Audio } from "expo-av";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Dimensions, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+// ✅ expo-av 대신 expo-audio 임포트
+import { useAudioPlayer } from "expo-audio";
 
 import {
   createInitialState,
@@ -23,7 +24,7 @@ export default function Index() {
     createInitialState(INITIAL_PIECES)
   );
 
-  const scrollRef = useRef<ScrollView>(null); // ✅ 기보 스크롤 제어용
+  const scrollRef = useRef<ScrollView>(null);
 
   // DB 연결 대비 (지금은 비워둠)
   const [evalValue] = useState<number>(0);
@@ -42,7 +43,6 @@ export default function Index() {
     const { pieces, turn } = moveState;
     const kingSq = findKingSquare(pieces, turn);
     const enemy = opposite(turn);
-
     const inCheck = kingSq ? isSquareAttacked(pieces, kingSq, enemy) : false;
 
     let hasMoves = false;
@@ -58,37 +58,36 @@ export default function Index() {
     const isCheckmate = inCheck && !hasMoves;
     const isStalemate = !inCheck && !hasMoves;
 
-    return {
-      inCheck,
-      checkmated: isCheckmate,
-      isStalemate,
-      kingSquare: kingSq
-    };
+    return { inCheck, checkmated: isCheckmate, isStalemate, kingSquare: kingSq };
   }, [moveState]);
 
-  // ✅ 소리 재생 로직
-  const prevMoveCount = useRef(moveState.moveHistory.length);
-  const sounds = {
-    move: require('../assets/sfx/move.wav'),
-    capture: require('../assets/sfx/capture.wav'),
-    castling: require('../assets/sfx/castling.wav'),
-    check: require('../assets/sfx/check.wav'),
-    gameover: require('../assets/sfx/gameover.wav'),
+  // ✅ [수정] expo-audio 방식의 소리 재생 로직
+  // useAudioPlayer는 리소스를 로드하고 자동으로 플레이어 인스턴스를 관리합니다.
+  const movePlayer = useAudioPlayer(require('../assets/sfx/move.wav'));
+  const capturePlayer = useAudioPlayer(require('../assets/sfx/capture.wav'));
+  const castlingPlayer = useAudioPlayer(require('../assets/sfx/castling.wav'));
+  const checkPlayer = useAudioPlayer(require('../assets/sfx/check.wav'));
+  const gameoverPlayer = useAudioPlayer(require('../assets/sfx/gameover.wav'));
+
+  const players = {
+    move: movePlayer,
+    capture: capturePlayer,
+    castling: castlingPlayer,
+    check: checkPlayer,
+    gameover: gameoverPlayer,
   };
 
-  const playSound = async (type: keyof typeof sounds) => {
-    try {
-      const { sound } = await Audio.Sound.createAsync(sounds[type]);
-      await sound.playAsync();
-      sound.setOnPlaybackStatusUpdate((status) => {
-        if (status.isLoaded && status.didJustFinish) {
-          sound.unloadAsync();
-        }
-      });
-    } catch (e) {
-      console.log("Sound play error:", e);
+  // 소리 재생 함수 (기존보다 훨씬 가볍고 빠릅니다)
+  const playSound = (type: keyof typeof players) => {
+    const player = players[type];
+    if (player) {
+      // expo-audio는 재생 후 끝에 멈춰 있으므로 처음으로 되돌린 후 재생합니다.
+      player.seekTo(0);
+      player.play();
     }
   };
+
+  const prevMoveCount = useRef(moveState.moveHistory.length);
 
   useEffect(() => {
     const currentCount = moveState.moveHistory.length;
@@ -107,7 +106,6 @@ export default function Index() {
         playSound('move');
       }
 
-      // ✅ 새로운 수가 두어지면 기보 스크롤을 맨 뒤로 이동
       setTimeout(() => {
         scrollRef.current?.scrollToEnd({ animated: true });
       }, 100);
@@ -115,7 +113,7 @@ export default function Index() {
     prevMoveCount.current = currentCount;
   }, [moveState.moveHistory.length, checkInfo]);
 
-  // 기보 그룹화
+  // 기보 그룹화 로직 (이하 동일)
   const grouped = useMemo(() => {
     const map = new Map<number, string[]>();
     for (const m of moveState.moveHistory) {
@@ -146,60 +144,31 @@ export default function Index() {
 
         <EvalBar value={evalValue} />
 
-        {/* ✅ 가로 스크롤 기보 (공간 절약형) */}
         <View style={styles.timelineSection}>
-          <ScrollView
-            ref={scrollRef}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.timelineContent}
-          >
+          <ScrollView ref={scrollRef} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.timelineContent}>
             {grouped.map(([ply, moves]) => (
               <View key={ply} style={styles.plyChip}>
                 <Text style={styles.plyLabel}>{ply}.</Text>
-                {moves.map((san, i) => (
-                  <Text key={i} style={styles.plyMoveText}>
-                    {san}
-                  </Text>
-                ))}
+                {moves.map((san, i) => <Text key={i} style={styles.plyMoveText}>{san}</Text>)}
               </View>
             ))}
           </ScrollView>
         </View>
 
         <View style={styles.actionsRow}>
-          <Pressable
-            disabled={!canUndo}
-            onPress={() => setMoveState((s) => undo(s))}
-            style={[styles.actionButton, !canUndo && styles.actionDisabled]}
-          >
+          <Pressable disabled={!canUndo} onPress={() => setMoveState((s) => undo(s))} style={[styles.actionButton, !canUndo && styles.actionDisabled]}>
             <Text style={styles.actionIcon}>↩️</Text>
             <Text style={styles.actionLabel}>Undo</Text>
           </Pressable>
-
-          <Pressable
-            disabled={!canRedo}
-            onPress={() => setMoveState((s) => redo(s))}
-            style={[styles.actionButton, !canRedo && styles.actionDisabled]}
-          >
+          <Pressable disabled={!canRedo} onPress={() => setMoveState((s) => redo(s))} style={[styles.actionButton, !canRedo && styles.actionDisabled]}>
             <Text style={styles.actionIcon}>↪️</Text>
             <Text style={styles.actionLabel}>Redo</Text>
           </Pressable>
-
-          <Pressable
-            onPress={() => setMoveState(resetGame(INITIAL_PIECES))}
-            style={styles.actionButton}
-          >
+          <Pressable onPress={() => setMoveState(resetGame(INITIAL_PIECES))} style={styles.actionButton}>
             <Text style={styles.actionIcon}>🔄</Text>
             <Text style={styles.actionLabel}>Reset</Text>
           </Pressable>
-
-          <Pressable
-            onPress={() =>
-              setOrientation((o) => (o === "white" ? "black" : "white"))
-            }
-            style={styles.actionButton}
-          >
+          <Pressable onPress={() => setOrientation((o) => (o === "white" ? "black" : "white"))} style={styles.actionButton}>
             <Text style={styles.actionIcon}>🔁</Text>
             <Text style={styles.actionLabel}>Flip</Text>
           </Pressable>
@@ -207,12 +176,7 @@ export default function Index() {
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>추천 수</Text>
-          <Recommendations
-            items={recommendations}
-            height={220}
-            onSelectMove={(move) => console.log("select move:", move)}
-            onSelectBranch={(b) => console.log("select branch:", b)}
-          />
+          <Recommendations items={recommendations} height={220} onSelectMove={(move) => console.log("select:", move)} onSelectBranch={(b) => console.log("select:", b)} />
         </View>
       </View>
     </SafeAreaView>
@@ -221,45 +185,13 @@ export default function Index() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: "#0B0F14" },
-  container: {
-    flex: 1,
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    gap: 16,
-  },
-
-  // ✅ 기보 섹션 스타일 변경
-  timelineSection: {
-    width: "100%",
-    height: 44,
-    backgroundColor: "rgba(255,255,255,0.05)",
-    borderRadius: 8,
-    overflow: "hidden",
-  },
-  timelineContent: {
-    paddingHorizontal: 12,
-    alignItems: "center",
-    gap: 12,
-  },
-  plyChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.08)",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    gap: 6,
-  },
+  container: { flex: 1, alignItems: "center", paddingHorizontal: 16, paddingTop: 16, gap: 16 },
+  timelineSection: { width: "100%", height: 44, backgroundColor: "rgba(255,255,255,0.05)", borderRadius: 8, overflow: "hidden" },
+  timelineContent: { paddingHorizontal: 12, alignItems: "center", gap: 12 },
+  plyChip: { flexDirection: "row", alignItems: "center", backgroundColor: "rgba(255,255,255,0.08)", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, gap: 6 },
   plyLabel: { fontSize: 13, fontWeight: "700", color: "rgba(231,237,245,0.4)" },
   plyMoveText: { fontSize: 14, fontWeight: "600", color: "#E7EDF5" },
-
-  actionsRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    width: "100%",
-    maxWidth: 360,
-  },
+  actionsRow: { flexDirection: "row", justifyContent: "space-between", width: "100%", maxWidth: 360 },
   actionButton: { alignItems: "center", width: 72, paddingVertical: 6, borderRadius: 10 },
   actionDisabled: { opacity: 0.35 },
   actionIcon: { fontSize: 22, lineHeight: 26 },
