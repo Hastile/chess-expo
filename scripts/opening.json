@@ -26,5 +26,35 @@
                 ]
             }
         }
+    },
+    "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1": {
+        "id": "e4",
+        "name": {
+            "ko": "킹즈 폰 오프닝",
+            "en": "King's Pawn Opening"
+        },
+        "eval": 0.2,
+        "moves": {
+            "e5": {
+                "type": "book",
+                "intent": "오픈 게임",
+                "branches": []
+            },
+            "c5": {
+                "type": "book",
+                "intent": "시실리안 디펜스",
+                "branches": []
+            },
+            "e6": {
+                "type": "book",
+                "intent": "프렌치 디펜스",
+                "branches": []
+            },
+            "c6": {
+                "type": "book",
+                "intent": "카로칸 디펜스",
+                "branches": []
+            }
+        }
     }
 }

@@ -1,5 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+// ✅ react-native-svg에서 SvgProps 임포트
+import { SvgProps } from "react-native-svg";
 
 export type EvalType =
     | "brilliant"
@@ -14,29 +16,45 @@ export type EvalType =
     | "forced";
 
 export type RecommendationItem = {
-    id?: string;         // optional (DB id)
-    move: string;        // e.g. "d6", "O-O"
+    id?: string;
+    move: string;
     type: EvalType;
-    intent?: string;     // ✅ 설명 추가
-    branches?: string[]; // e.g. ["Najdorf", "Dragon", ...]
+    intent?: string;
+    branches?: string[];
+    eval?: number | string;
 };
 
 const EVAL_META: Record<EvalType, { color: string; label: string }> = {
-    brilliant: { color: "#1aada7", label: "!! 기발함" },
-    best: { color: "#91b045", label: "★ 최선" },
+    brilliant: { color: "#1aada7", label: "기발함" }, // 아이콘이 있으므로 텍스트 간소화
+    best: { color: "#91b045", label: "최선" },
     excellent: { color: "#91b045", label: "훌륭함" },
     book: { color: "#a98865", label: "정석" },
     okay: { color: "#a98865", label: "무난함" },
-    inaccuracy: { color: "#f7c044", label: "?! 부정확" },
-    mistake: { color: "#e58f2a", label: "? 실수" },
-    blunder: { color: "#ca3430", label: "?? 블런더" },
-    critical: { color: "#1aada7", label: "! 승부처" },
+    inaccuracy: { color: "#f7c044", label: "부정확" },
+    mistake: { color: "#e58f2a", label: "실수" },
+    blunder: { color: "#ca3430", label: "블런더" },
+    critical: { color: "#1aada7", label: "승부처" },
     forced: { color: "#333333", label: "강제수" },
+};
+
+// ✅ [추가] 타입별 SVG 아이콘 매핑
+// Expo/Metro 환경에서는 require().default 형태로 SVG 컴포넌트를 가져오는 경우가 많습니다.
+const MOVE_ICONS: Record<string, React.FC<SvgProps>> = {
+    brilliant: require("@/assets/images/moves/brilliant.svg").default,
+    best: require("@/assets/images/moves/best.svg").default,
+    excellent: require("@/assets/images/moves/excellent.svg").default,
+    book: require("@/assets/images/moves/book.svg").default,
+    okay: require("@/assets/images/moves/okay.svg").default,
+    inaccuracy: require("@/assets/images/moves/inaccuracy.svg").default,
+    mistake: require("@/assets/images/moves/mistake.svg").default,
+    blunder: require("@/assets/images/moves/blunder.svg").default,
+    critical: require("@/assets/images/moves/critical.svg").default,
+    forced: require("@/assets/images/moves/forced.svg").default,
 };
 
 type Props = {
     items?: RecommendationItem[];
-    height?: number; // default 220 (약 4개)
+    height?: number;
     onSelectMove?: (move: string, item: RecommendationItem) => void;
     onSelectBranch?: (branch: string, parent: RecommendationItem) => void;
 };
@@ -69,6 +87,9 @@ export default function Recommendations({
                             const opened = openIndex === idx;
                             const canExpand = !!it.branches?.length;
 
+                            // ✅ 현재 타입에 해당하는 아이콘 컴포넌트 가져오기
+                            const IconComponent = MOVE_ICONS[it.type];
+
                             return (
                                 <View key={keyOf(it, idx)}>
                                     {/* main row */}
@@ -81,7 +102,6 @@ export default function Recommendations({
                                     >
                                         <View style={[styles.indicator, { backgroundColor: meta.color }]} />
 
-                                        {/* ✅ 텍스트 영역: Move와 Intent를 가로로 배치 */}
                                         <View style={styles.textContainer}>
                                             <Text style={styles.moveText} numberOfLines={1}>
                                                 {it.move}
@@ -92,6 +112,15 @@ export default function Recommendations({
                                                 </Text>
                                             )}
                                         </View>
+
+                                        {/* ✅ [추가] 아이콘 렌더링 (평가 텍스트 왼쪽에 배치) */}
+                                        {IconComponent && (
+                                            <IconComponent
+                                                width={20} // 아이콘 크기 조절
+                                                height={20}
+                                                style={styles.moveIcon}
+                                            />
+                                        )}
 
                                         <Text style={[styles.evalText, { color: meta.color }]} numberOfLines={1}>
                                             {meta.label}
@@ -137,81 +166,37 @@ export default function Recommendations({
 
 const styles = StyleSheet.create({
     wrap: { width: "100%", maxWidth: 360, gap: 8 },
-
-    viewport: {
-        borderRadius: 8,
-        overflow: "hidden",
-    },
-
+    viewport: { borderRadius: 8, overflow: "hidden" },
     list: { paddingVertical: 4, gap: 4 },
-
-    empty: {
-        flex: 1,
-        alignItems: "center",
-        justifyContent: "center",
-        backgroundColor: "rgba(255,255,255,0.04)",
-        borderRadius: 8,
-    },
-    emptyText: {
-        fontSize: 12,
-        color: "rgba(231,237,245,0.55)",
-        fontWeight: "700",
-    },
+    empty: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.04)", borderRadius: 8 },
+    emptyText: { fontSize: 12, color: "rgba(231,237,245,0.55)", fontWeight: "700" },
 
     row: {
         flexDirection: "row",
         alignItems: "center",
-        paddingVertical: 10,
+        paddingVertical: 8, // 상하 패딩 약간 줄임
         paddingHorizontal: 8,
         borderRadius: 8,
     },
     rowPressed: { backgroundColor: "rgba(255,255,255,0.06)" },
 
-    indicator: {
-        width: 4,
-        height: 28,
-        borderRadius: 2,
-        marginRight: 8,
+    indicator: { width: 4, height: 28, borderRadius: 2, marginRight: 8 },
+
+    textContainer: { flex: 1, flexDirection: "row", alignItems: "baseline", marginRight: 8 },
+    moveText: { fontSize: 15, fontWeight: "700", color: "#E7EDF5" },
+    intentText: { flex: 1, marginLeft: 8, fontSize: 12, color: "rgba(231,237,245,0.45)", fontWeight: "500" },
+
+    // ✅ [추가] 아이콘 스타일
+    moveIcon: {
+        marginRight: 6, // 텍스트와의 간격
     },
 
-    // ✅ Move와 Intent를 감싸는 컨테이너
-    textContainer: {
-        flex: 1,
-        flexDirection: "row",
-        alignItems: "baseline",
-    },
+    evalText: { fontSize: 12, fontWeight: "700" },
 
-    moveText: {
-        fontSize: 15,
-        fontWeight: "700",
-        color: "#E7EDF5",
-    },
-
-    // ✅ 의도(Intent) 텍스트 스타일: 폰트 크기를 줄이고 투명도를 높임
-    intentText: {
-        flex: 1,
-        marginLeft: 8,
-        fontSize: 12,
-        color: "rgba(231,237,245,0.45)",
-        fontWeight: "500",
-    },
-
-    evalText: {
-        marginLeft: 8,
-        fontSize: 12,
-        fontWeight: "700",
-    },
-
-    expandBtn: { paddingHorizontal: 6, paddingVertical: 4 },
+    expandBtn: { paddingHorizontal: 6, paddingVertical: 4, marginLeft: 4 },
     expandIcon: { fontSize: 16, color: "rgba(231,237,245,0.6)" },
 
-    branchRow: {
-        flexDirection: "row",
-        alignItems: "center",
-        paddingLeft: 28,
-        paddingVertical: 6,
-        paddingRight: 8,
-    },
+    branchRow: { flexDirection: "row", alignItems: "center", paddingLeft: 28, paddingVertical: 6, paddingRight: 8 },
     branchPressed: { backgroundColor: "rgba(255,255,255,0.04)" },
     branchDot: { marginRight: 6, color: "rgba(231,237,245,0.4)" },
     branchText: { fontSize: 13, color: "rgba(231,237,245,0.75)", flex: 1 },
