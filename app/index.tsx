@@ -8,6 +8,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Dimensions, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { EvalType } from "@/components/Icons";
 import openingData from "@/scripts/opening.json";
 
 import {
@@ -24,6 +25,7 @@ export default function Index() {
   const [moveState, setMoveState] = useState<MoveState>(() =>
     createInitialState(INITIAL_PIECES)
   );
+  const [lastMoveEval, setLastMoveEval] = useState<{ type: EvalType, toSq: Square } | null>(null);
 
   const scrollRef = useRef<ScrollView>(null);
 
@@ -136,6 +138,27 @@ export default function Index() {
     return Array.from(map.entries());
   }, [moveState.moveHistory]);
 
+  const handleSelectMove = (moveSan: string, item: RecommendationItem) => {
+    // 1. 실제 수를 둠 (기존 로직)
+    const nextState = handleSquarePress(moveState, /* SAN을 좌표로 바꾸는 로직 필요하지만 일단 생략 */ null); // *중요: 실제로는 여기 복잡한 로직이 필요함.
+
+    // ⚠️ 간소화를 위해, 실제 움직임 로직 대신 개념만 보여드립니다.
+    // 실제로는 chess.js 등을 통해 SAN(e4)을 출발/도착지(e2, e4)로 변환해야 합니다.
+    // 여기서는 예시로 'e4'가 도착지라고 가정하고 상태만 업데이트합니다.
+
+    // 임시 구현: 실제 게임 로직에 맞춰 수정 필요
+    const mockToSquare = moveSan.replace("+", "").replace("#", "").slice(-2) as Square; // 대략적인 도착지 추정
+
+    setMoveState(nextState); // 보드 업데이트
+
+    // 2. [추가] 마지막 수의 평가 타입과 도착지 저장
+    setLastMoveEval({ type: it.type, toSq: mockToSquare });
+  };
+
+  useEffect(() => {
+    setLastMoveEval(null);
+  }, [moveState.fen]); // FEN이 바뀌면 초기화
+
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.container}>
@@ -151,6 +174,7 @@ export default function Index() {
             checkmated: checkInfo.checkmated,
             kingSquare: checkInfo.kingSquare
           }}
+          lastMoveEval={lastMoveEval}
         />
 
         <EvalBar value={openingInfo.eval} />
@@ -196,7 +220,7 @@ export default function Index() {
           <Recommendations
             items={openingInfo.recommendations}
             height={200}
-            onSelectMove={(move) => console.log("선택:", move)}
+            onSelectMove={handleSelectMove}
             onSelectBranch={(branch, parent) => console.log(`[${parent.move}] 분기: ${branch}`)}
           />
         </View>

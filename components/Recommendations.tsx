@@ -1,19 +1,10 @@
-import React, { useMemo, useState } from "react";
+import React, { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-// ✅ react-native-svg에서 SvgProps 임포트
 import { SvgProps } from "react-native-svg";
 
 export type EvalType =
-    | "brilliant"
-    | "best"
-    | "excellent"
-    | "book"
-    | "okay"
-    | "inaccuracy"
-    | "mistake"
-    | "blunder"
-    | "critical"
-    | "forced";
+    | "brilliant" | "best" | "excellent" | "book" | "okay"
+    | "inaccuracy" | "mistake" | "blunder" | "critical" | "forced";
 
 export type RecommendationItem = {
     id?: string;
@@ -24,21 +15,7 @@ export type RecommendationItem = {
     eval?: number | string;
 };
 
-const EVAL_META: Record<EvalType, { color: string; label: string }> = {
-    brilliant: { color: "#1aada7", label: "기발함" }, // 아이콘이 있으므로 텍스트 간소화
-    best: { color: "#91b045", label: "최선" },
-    excellent: { color: "#91b045", label: "훌륭함" },
-    book: { color: "#a98865", label: "정석" },
-    okay: { color: "#a98865", label: "무난함" },
-    inaccuracy: { color: "#f7c044", label: "부정확" },
-    mistake: { color: "#e58f2a", label: "실수" },
-    blunder: { color: "#ca3430", label: "블런더" },
-    critical: { color: "#1aada7", label: "승부처" },
-    forced: { color: "#333333", label: "강제수" },
-};
-
-// ✅ [추가] 타입별 SVG 아이콘 매핑
-// Expo/Metro 환경에서는 require().default 형태로 SVG 컴포넌트를 가져오는 경우가 많습니다.
+// ✅ SVG 컴포넌트 매핑
 const MOVE_ICONS: Record<string, React.FC<SvgProps>> = {
     brilliant: require("@/assets/images/moves/brilliant.svg").default,
     best: require("@/assets/images/moves/best.svg").default,
@@ -52,152 +29,131 @@ const MOVE_ICONS: Record<string, React.FC<SvgProps>> = {
     forced: require("@/assets/images/moves/forced.svg").default,
 };
 
-type Props = {
+const EVAL_META: Record<EvalType, { color: string; label: string }> = {
+    brilliant: { color: "#1aada7", label: "기발함" },
+    best: { color: "#91b045", label: "최선" },
+    excellent: { color: "#91b045", label: "훌륭함" },
+    book: { color: "#a98865", label: "정석" },
+    okay: { color: "#a98865", label: "무난함" },
+    inaccuracy: { color: "#f7c044", label: "부정확" },
+    mistake: { color: "#e58f2a", label: "실수" },
+    blunder: { color: "#ca3430", label: "블런더" },
+    critical: { color: "#1aada7", label: "승부처" },
+    forced: { color: "#333333", label: "강제수" },
+};
+
+// ✅ 인터페이스 이름 수정 및 onSelectBranch 추가
+export interface RecommendationsProps {
     items?: RecommendationItem[];
     height?: number;
     onSelectMove?: (move: string, item: RecommendationItem) => void;
-    onSelectBranch?: (branch: string, parent: RecommendationItem) => void;
-};
+    onSelectBranch?: (branch: string, parent: RecommendationItem) => void; // 👈 추가됨
+}
 
 export default function Recommendations({
     items = [],
     height = 220,
     onSelectMove,
-    onSelectBranch,
-}: Props) {
+    onSelectBranch, // 👈 추가됨
+}: RecommendationsProps) {
     const [openIndex, setOpenIndex] = useState<number | null>(null);
-
-    const hasItems = items.length > 0;
-
-    const keyOf = useMemo(() => {
-        return (item: RecommendationItem, idx: number) => item.id ?? `${item.move}-${idx}`;
-    }, []);
 
     return (
         <View style={styles.wrap}>
             <View style={[styles.viewport, { height }]}>
-                {!hasItems ? (
-                    <View style={styles.empty}>
-                        <Text style={styles.emptyText}>추천 수 없음</Text>
-                    </View>
-                ) : (
-                    <ScrollView contentContainerStyle={styles.list}>
-                        {items.map((it, idx) => {
-                            const meta = EVAL_META[it.type];
-                            const opened = openIndex === idx;
-                            const canExpand = !!it.branches?.length;
+                <ScrollView contentContainerStyle={styles.list}>
+                    {items.map((it, idx) => {
+                        const meta = EVAL_META[it.type];
+                        const opened = openIndex === idx;
+                        const canExpand = !!it.branches?.length;
+                        const IconComponent = MOVE_ICONS[it.type];
 
-                            // ✅ 현재 타입에 해당하는 아이콘 컴포넌트 가져오기
-                            const IconComponent = MOVE_ICONS[it.type];
-
-                            return (
-                                <View key={keyOf(it, idx)}>
-                                    {/* main row */}
+                        return (
+                            <View key={`${it.move}-${idx}`} style={styles.rowWrapper}>
+                                <View style={styles.rowContainer}>
                                     <Pressable
                                         onPress={() => onSelectMove?.(it.move, it)}
-                                        style={({ pressed }) => [
-                                            styles.row,
-                                            pressed && styles.rowPressed,
-                                        ]}
+                                        style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
                                     >
                                         <View style={[styles.indicator, { backgroundColor: meta.color }]} />
-
                                         <View style={styles.textContainer}>
-                                            <Text style={styles.moveText} numberOfLines={1}>
-                                                {it.move}
-                                            </Text>
+                                            <Text style={styles.moveText}>{it.move}</Text>
                                             {it.intent && (
-                                                <Text style={styles.intentText} numberOfLines={1}>
-                                                    {it.intent.replace(/\n/g, " ")}
-                                                </Text>
+                                                <Text style={styles.intentText} numberOfLines={1}>{it.intent}</Text>
                                             )}
                                         </View>
-
-                                        {/* ✅ [추가] 아이콘 렌더링 (평가 텍스트 왼쪽에 배치) */}
-                                        {IconComponent && (
-                                            <IconComponent
-                                                width={20} // 아이콘 크기 조절
-                                                height={20}
-                                                style={styles.moveIcon}
-                                            />
-                                        )}
-
-                                        <Text style={[styles.evalText, { color: meta.color }]} numberOfLines={1}>
-                                            {meta.label}
-                                        </Text>
+                                        <Text style={[styles.evalLabel, { color: meta.color }]}>{meta.label}</Text>
 
                                         {canExpand && (
-                                            <Pressable
-                                                onPress={() => setOpenIndex(opened ? null : idx)}
-                                                style={styles.expandBtn}
-                                                hitSlop={10}
-                                            >
+                                            <Pressable onPress={() => setOpenIndex(opened ? null : idx)} style={styles.expandBtn}>
                                                 <Text style={styles.expandIcon}>{opened ? "▾" : "▸"}</Text>
                                             </Pressable>
                                         )}
                                     </Pressable>
 
-                                    {/* branches */}
-                                    {opened &&
-                                        it.branches?.map((b, i) => (
-                                            <Pressable
-                                                key={`${b}-${i}`}
-                                                onPress={() => onSelectBranch?.(b, it)}
-                                                style={({ pressed }) => [
-                                                    styles.branchRow,
-                                                    pressed && styles.branchPressed,
-                                                ]}
-                                            >
-                                                <Text style={styles.branchDot}>•</Text>
-                                                <Text style={styles.branchText} numberOfLines={1}>
-                                                    {b}
-                                                </Text>
-                                            </Pressable>
-                                        ))}
+                                    {/* ✅ 우측 상단 SVG 배지 */}
+                                    {IconComponent && (
+                                        <View style={styles.iconBadge}>
+                                            <IconComponent width={14} height={14} />
+                                        </View>
+                                    )}
                                 </View>
-                            );
-                        })}
-                    </ScrollView>
-                )}
+
+                                {/* branches */}
+                                {opened && it.branches?.map((b, i) => (
+                                    <Pressable
+                                        key={`${b}-${i}`}
+                                        onPress={() => onSelectBranch?.(b, it)}
+                                        style={({ pressed }) => [styles.branchRow, pressed && styles.branchPressed]}
+                                    >
+                                        <Text style={styles.branchDot}>•</Text>
+                                        <Text style={styles.branchText}>{b}</Text>
+                                    </Pressable>
+                                ))}
+                            </View>
+                        );
+                    })}
+                </ScrollView>
             </View>
         </View>
     );
 }
 
 const styles = StyleSheet.create({
-    wrap: { width: "100%", maxWidth: 360, gap: 8 },
+    wrap: { width: "100%", maxWidth: 360 },
     viewport: { borderRadius: 8, overflow: "hidden" },
-    list: { paddingVertical: 4, gap: 4 },
-    empty: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.04)", borderRadius: 8 },
-    emptyText: { fontSize: 12, color: "rgba(231,237,245,0.55)", fontWeight: "700" },
-
+    list: { paddingVertical: 8, gap: 4 },
+    rowWrapper: { marginBottom: 4 },
+    rowContainer: { position: "relative" },
     row: {
         flexDirection: "row",
         alignItems: "center",
-        paddingVertical: 8, // 상하 패딩 약간 줄임
-        paddingHorizontal: 8,
+        paddingVertical: 12,
+        paddingHorizontal: 12,
+        backgroundColor: "rgba(255,255,255,0.04)",
         borderRadius: 8,
+        marginHorizontal: 8,
     },
-    rowPressed: { backgroundColor: "rgba(255,255,255,0.06)" },
-
-    indicator: { width: 4, height: 28, borderRadius: 2, marginRight: 8 },
-
-    textContainer: { flex: 1, flexDirection: "row", alignItems: "baseline", marginRight: 8 },
-    moveText: { fontSize: 15, fontWeight: "700", color: "#E7EDF5" },
-    intentText: { flex: 1, marginLeft: 8, fontSize: 12, color: "rgba(231,237,245,0.45)", fontWeight: "500" },
-
-    // ✅ [추가] 아이콘 스타일
-    moveIcon: {
-        marginRight: 6, // 텍스트와의 간격
+    rowPressed: { backgroundColor: "rgba(255,255,255,0.08)" },
+    indicator: { width: 4, height: 20, borderRadius: 2, marginRight: 10 },
+    textContainer: { flex: 1, flexDirection: "row", alignItems: "baseline" },
+    moveText: { fontSize: 16, fontWeight: "700", color: "#E7EDF5" },
+    intentText: { marginLeft: 8, fontSize: 12, color: "rgba(231,237,245,0.4)", flex: 1 },
+    evalLabel: { fontSize: 11, fontWeight: "800", opacity: 0.8 },
+    iconBadge: {
+        position: "absolute",
+        top: -4,
+        right: 4,
+        backgroundColor: "#0B0F14",
+        borderRadius: 10,
+        padding: 2,
+        borderWidth: 1,
+        borderColor: "rgba(255,255,255,0.1)",
     },
-
-    evalText: { fontSize: 12, fontWeight: "700" },
-
-    expandBtn: { paddingHorizontal: 6, paddingVertical: 4, marginLeft: 4 },
+    expandBtn: { paddingLeft: 10 },
     expandIcon: { fontSize: 16, color: "rgba(231,237,245,0.6)" },
-
-    branchRow: { flexDirection: "row", alignItems: "center", paddingLeft: 28, paddingVertical: 6, paddingRight: 8 },
+    branchRow: { flexDirection: "row", alignItems: "center", paddingLeft: 32, paddingVertical: 8 },
     branchPressed: { backgroundColor: "rgba(255,255,255,0.04)" },
-    branchDot: { marginRight: 6, color: "rgba(231,237,245,0.4)" },
-    branchText: { fontSize: 13, color: "rgba(231,237,245,0.75)", flex: 1 },
+    branchDot: { marginRight: 8, color: "rgba(231,237,245,0.3)" },
+    branchText: { fontSize: 13, color: "rgba(231,237,245,0.6)" },
 });
