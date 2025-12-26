@@ -1,6 +1,6 @@
 import ChessBoard, { INITIAL_PIECES, Square } from "@/components/ChessBoard";
 import EvalBar from "@/components/EvalBar";
-import Recommendations, { RecommendationItem } from "@/components/Recommendations";
+import Recommendations from "@/components/Recommendations";
 import { findKingSquare, getLegalMoves, isSquareAttacked, opposite } from "@/scripts/Piece";
 
 import { useAudioPlayer } from "expo-audio";
@@ -26,7 +26,6 @@ export default function Index() {
   );
 
   const scrollRef = useRef<ScrollView>(null);
-  const [evalValue] = useState<number>(0);
 
   const boardSize = useMemo(() => {
     const w = Dimensions.get("window").width;
@@ -38,30 +37,48 @@ export default function Index() {
 
   // ✅ 오프닝 정보 추출 (한글/영어 이름 포함)
   const openingInfo = useMemo(() => {
-    const currentFen = moveState.fen;
-    let data = (openingData as any)[currentFen];
+    const currentBase = moveState.fen.split(' ').slice(0, 3).join(' ');
+
+    // 🔍 여기 로그를 꼭 확인하세요!
+    const foundKey = Object.keys(openingData).find(key => {
+      const dbBase = key.split(' ').slice(0, 3).join(' ');
+      return dbBase === currentBase;
+    });
+
+    const data = foundKey ? (openingData as any)[foundKey] : null;
+
+    // 로그로 데이터가 찍히는지 확인
+    console.log(`[Debug] Current Base: ${currentBase}`);
+    console.log(`[Debug] Found Data:`, data);
 
     if (!data) {
-      const baseFen = currentFen.split(' ').slice(0, 4).join(' ');
-      const foundKey = Object.keys(openingData).find(key => key.startsWith(baseFen));
-      if (foundKey) data = (openingData as any)[foundKey];
+      return { name: "알 수 없는 오프닝", enName: "Unknown", recommendations: [], eval: 0 };
     }
 
-    if (!data) return { name: "알 수 없는 오프닝", enName: "Unknown Opening", recommendations: [] };
-
-    const recs: RecommendationItem[] = Object.entries(data.moves).map(([move, detail]: [string, any]) => ({
-      move,
-      type: detail.type,
-      intent: detail.intent,
-      branches: detail.branches,
-    }));
-
     return {
-      name: data.name.ko,    // 한국어 이름
-      enName: data.name.en,  // 영어 이름
-      recommendations: recs
+      name: data.name?.ko || "이름 없음",
+      enName: data.name?.en || "Unnamed",
+      recommendations: Object.entries(data.moves || {}).map(([move, detail]: [string, any]) => ({
+        move,
+        type: detail.type,
+        intent: detail.intent,
+        branches: detail.branches,
+      })),
+      eval: data.eval ?? 0 // ✅ DB의 eval 값이 여기로 들어오는지 확인
     };
   }, [moveState.fen]);
+
+  const evalDisplay = useMemo(() => {
+    const val = openingInfo.eval;
+    if (typeof val === 'string') {
+      if (val.startsWith('M')) return `#${val.slice(1)}`;
+      if (val.startsWith('-M')) return `-#${val.slice(2)}`;
+      return val;
+    }
+    if (val >= 20) return "#";
+    if (val <= -20) return "-#";
+    return val > 0 ? `+${val.toFixed(1)}` : val.toFixed(1);
+  }, [openingInfo.eval]);
 
   // 게임 상태 계산
   const checkInfo = useMemo(() => {
@@ -136,7 +153,7 @@ export default function Index() {
           }}
         />
 
-        <EvalBar value={evalValue} />
+        <EvalBar value={openingInfo.eval} />
 
         {/* ✅ [추가] 기보 섹션 상단 오프닝 타이틀 영역 */}
         <View style={styles.openingHeader}>
