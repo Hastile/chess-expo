@@ -1,45 +1,66 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { useFonts } from 'expo-font';
+import { Asset } from 'expo-asset';
+import * as FileSystem from 'expo-file-system';
+import { Paths } from 'expo-file-system'; // ✅ SDK 54 전용 신규 API
 import { Stack } from 'expo-router';
-import * as SplashScreen from 'expo-splash-screen';
-import { SQLiteProvider } from 'expo-sqlite'; // ✅ SQLite 공급자 임포트
-import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
-import 'react-native-reanimated';
-
-import { useColorScheme } from '@/hooks/use-color-scheme';
-
-// 앱이 준비될 때까지 스플래시 화면을 유지합니다.
-SplashScreen.preventAutoHideAsync();
+import { SQLiteProvider } from 'expo-sqlite';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, View } from 'react-native';
 
 export default function RootLayout() {
-    const colorScheme = useColorScheme();
-    const [loaded] = useFonts({
-        SpaceMono: require('../assets/fonts/PAPERLOGY-4REGULAR.ttf'), // 폰트 경로 확인 필요
-    });
+    const [dbLoaded, setDbLoaded] = useState(false);
 
     useEffect(() => {
-        if (loaded) {
-            SplashScreen.hideAsync();
-        }
-    }, [loaded]);
+        async function loadDatabase() {
+            const dbName = "chessDB.sqlite";
 
-    if (!loaded) {
-        return null;
+            // ✅ SDK 54 스타일: Paths.document를 사용합니다.
+            // Paths.document.uri는 기존의 documentDirectory와 동일한 string을 반환합니다.
+            const docDir = Paths.document.uri;
+            const dbDir = `${docDir}SQLite`;
+            const dbPath = `${dbDir}/${dbName}`;
+
+            try {
+                // 1. SQLite 폴더가 없으면 생성 (경로 확인)
+                const dirInfo = await FileSystem.getInfoAsync(dbDir);
+                if (!dirInfo.exists) {
+                    await FileSystem.makeDirectoryAsync(dbDir, { intermediates: true });
+                }
+
+                // 2. 파일 복사 여부 확인
+                const fileInfo = await FileSystem.getInfoAsync(dbPath);
+                if (!fileInfo.exists) {
+                    // ✅ assets/chessDB.sqlite가 존재해야 합니다.
+                    const asset = await Asset.fromModule(require('../assets/chessDB.sqlite')).downloadAsync();
+                    if (asset.localUri) {
+                        await FileSystem.copyAsync({
+                            from: asset.localUri,
+                            to: dbPath,
+                        });
+                    }
+                }
+                setDbLoaded(true);
+            } catch (error) {
+                console.error("DB 로드 중 오류 발생:", error);
+            }
+        }
+
+        loadDatabase();
+    }, []);
+
+    // DB가 준비될 때까지 로딩 화면을 보여줍니다.
+    if (!dbLoaded) {
+        return (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0B0F14' }}>
+                <ActivityIndicator size="large" color="#91b045" />
+            </View>
+        );
     }
 
     return (
-        // ✅ SQLiteProvider로 앱 전체를 감싸서 index.tsx에서 DB를 쓸 수 있게 합니다.
-        // databaseName은 업로드하신 파일명인 'chessDB.sqlite'와 일치해야 합니다.
         <SQLiteProvider databaseName="chessDB.sqlite">
-            <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-                <Stack>
-                    {/* index.tsx가 메인 화면으로 표시됩니다. */}
-                    <Stack.Screen name="index" options={{ headerShown: false }} />
-                    {/* <Stack.Screen name="+not-found" />/ */}
-                </Stack>
-                <StatusBar style="auto" />
-            </ThemeProvider>
+            <Stack>
+                <Stack.Screen name="index" options={{ headerShown: false }} />
+            </Stack>
         </SQLiteProvider>
     );
 }
