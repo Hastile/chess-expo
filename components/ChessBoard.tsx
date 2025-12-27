@@ -1,40 +1,9 @@
+// components/ChessBoard.tsx
+import { INITIAL_PIECES, PIECE_IMAGES, PiecesMap, Square } from "@/scripts/Piece"; // ✅ 여기서 가져옴
 import { Image } from "expo-image";
 import React, { useMemo } from "react";
 import { Pressable, Image as RNImage, StyleSheet, View } from "react-native";
 import { EvalType, MOVE_ICONS } from "./Icons";
-
-/* ===== Types ===== */
-export type Color = "white" | "black";
-export type Piece = "king" | "queen" | "rook" | "bishop" | "knight" | "pawn";
-export type Square = `${"a" | "b" | "c" | "d" | "e" | "f" | "g" | "h"}${1 | 2 | 3 | 4 | 5 | 6 | 7 | 8}`;
-export type PiecesMap = Partial<Record<Square, { color: Color; piece: Piece }>>;
-
-/* ===== Piece Images (기존 유지) ===== */
-export const PIECE_IMAGES: Record<Color, Record<Piece, any>> = {
-    white: {
-        king: require("../assets/images/Units/WhiteKing.webp"),
-        queen: require("../assets/images/Units/WhiteQueen.webp"),
-        rook: require("../assets/images/Units/WhiteRook.webp"),
-        bishop: require("../assets/images/Units/WhiteBishop.webp"),
-        knight: require("../assets/images/Units/WhiteKnight.webp"),
-        pawn: require("../assets/images/Units/WhitePawn.webp"),
-    },
-    black: {
-        king: require("../assets/images/Units/BlackKing.webp"),
-        queen: require("../assets/images/Units/BlackQueen.webp"),
-        rook: require("../assets/images/Units/BlackRook.webp"),
-        bishop: require("../assets/images/Units/BlackBishop.webp"),
-        knight: require("../assets/images/Units/BlackKnight.webp"),
-        pawn: require("../assets/images/Units/BlackPawn.webp"),
-    },
-};
-
-export const INITIAL_PIECES: PiecesMap = {
-    a1: { color: "white", piece: "rook" }, b1: { color: "white", piece: "knight" }, c1: { color: "white", piece: "bishop" }, d1: { color: "white", piece: "queen" }, e1: { color: "white", piece: "king" }, f1: { color: "white", piece: "bishop" }, g1: { color: "white", piece: "knight" }, h1: { color: "white", piece: "rook" },
-    a2: { color: "white", piece: "pawn" }, b2: { color: "white", piece: "pawn" }, c2: { color: "white", piece: "pawn" }, d2: { color: "white", piece: "pawn" }, e2: { color: "white", piece: "pawn" }, f2: { color: "white", piece: "pawn" }, g2: { color: "white", piece: "pawn" }, h2: { color: "white", piece: "pawn" },
-    a8: { color: "black", piece: "rook" }, b8: { color: "black", piece: "knight" }, c8: { color: "black", piece: "bishop" }, d8: { color: "black", piece: "queen" }, e8: { color: "black", piece: "king" }, f8: { color: "black", piece: "bishop" }, g8: { color: "black", piece: "knight" }, h8: { color: "black", piece: "rook" },
-    a7: { color: "black", piece: "pawn" }, b7: { color: "black", piece: "pawn" }, c7: { color: "black", piece: "pawn" }, d7: { color: "black", piece: "pawn" }, e7: { color: "black", piece: "pawn" }, f7: { color: "black", piece: "pawn" }, g7: { color: "black", piece: "pawn" }, h7: { color: "black", piece: "pawn" },
-};
 
 type Props = {
     size: number;

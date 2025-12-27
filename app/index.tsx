@@ -1,32 +1,33 @@
-import ChessBoard, { INITIAL_PIECES, Piece, Square } from "@/components/ChessBoard";
+// app/index.tsx
+import ChessBoard from "@/components/ChessBoard";
+
 import EvalBar from "@/components/EvalBar";
 import Recommendations from "@/components/Recommendations";
-import { findKingSquare, getLegalMoves, isSquareAttacked, opposite } from "@/scripts/Piece";
+import { findKingSquare, getLegalMoves, INITIAL_PIECES, isSquareAttacked, opposite, Piece, Square } from "@/scripts/Piece";
 
-import { useAudioPlayer } from "expo-audio";
 import * as SQLite from "expo-sqlite";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Dimensions, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { EvalType } from "@/components/Icons";
 import PromotionModal from "@/components/PromotionModal";
 
+import { GameContext } from "./_layout";
+
 import {
-  createInitialState,
   handleSquarePress,
   isPawnPromotion,
-  MoveState,
   redo,
   resetGame,
   undo
 } from "@/scripts/Piece";
 
 export default function Index() {
-  const [orientation, setOrientation] = useState<"white" | "black">("white");
-  const [moveState, setMoveState] = useState<MoveState>(() =>
-    createInitialState(INITIAL_PIECES)
-  );
+  const gameContext = useContext(GameContext);
+  if (!gameContext) return null;
+
+  const { moveState, setMoveState, orientation, setOrientation } = gameContext;
 
   // ✅ [수정] 타입을 명시하여 'never' 에러 해결. eval에 문자열(M1 등)이 올 수 있음을 알려줍니다.
   const [openingInfo, setOpeningInfo] = useState<{
@@ -163,69 +164,6 @@ export default function Index() {
     }
     return { inCheck, checkmated: inCheck && !hasMoves, isStalemate: !inCheck && !hasMoves, kingSquare: kingSq };
   }, [moveState]);
-
-  const audioOptions = { downloadFirst: true };
-  const movePlayer = useAudioPlayer(require('../assets/sfx/move.wav'), audioOptions);
-  const capturePlayer = useAudioPlayer(require('../assets/sfx/capture.wav'), audioOptions);
-  const castlingPlayer = useAudioPlayer(require('../assets/sfx/castling.wav'), audioOptions);
-  const checkPlayer = useAudioPlayer(require('../assets/sfx/check.wav'), audioOptions);
-  const gameoverPlayer = useAudioPlayer(require('../assets/sfx/gameover.wav'), audioOptions);
-
-  const playSound = (type: string) => {
-    const soundMap: Record<string, any> = {
-      move: movePlayer,
-      capture: capturePlayer,
-      castling: castlingPlayer,
-      check: checkPlayer,
-      gameover: gameoverPlayer
-    };
-
-    const p = soundMap[type];
-    if (p) {
-      // ✅ [로그] 프로퍼티를 확인하기 위해 객체 전체를 출력해봅니다.
-      // console.log(`[Sound] Playing: ${type}, Volume: ${p.volume}`);
-
-      try {
-        p.volume = 1.0;
-        p.seekTo(0); // ✅ 처음으로 되감기
-        p.play();    // ✅ 즉시 재생 시도
-      } catch (e) {
-        console.error(`[Sound] ${type} 재생 실패:`, e);
-      }
-    }
-  };
-
-  // ✅ [수정] useRef를 통해 소리 중복 재생 및 누락 방지
-  const prevMoveCount = useRef(moveState.moveHistory.length);
-
-  useEffect(() => {
-    const currentCount = moveState.moveHistory.length;
-
-    // 수가 늘어났을 때만 소리 재생
-    if (currentCount > prevMoveCount.current) {
-      const lastMove = moveState.moveHistory[currentCount - 1];
-
-      // ✅ [중요] 최신 checkInfo를 기반으로 사운드 결정
-      if (checkInfo.checkmated || checkInfo.isStalemate) {
-        playSound('gameover');
-      } else if (checkInfo.inCheck) {
-        playSound('check');
-      } else if (lastMove.san.includes('O-O')) {
-        playSound('castling');
-      } else if (lastMove.san.includes('x')) {
-        playSound('capture');
-      } else {
-        playSound('move');
-      }
-
-      setTimeout(() => {
-        scrollRef.current?.scrollToEnd({ animated: true });
-      }, 100);
-    }
-
-    // 항상 최신 상태를 유지하도록 업데이트
-    prevMoveCount.current = currentCount;
-  }, [moveState.moveHistory.length, checkInfo]); // checkInfo도 종속성에 포함되어야 정확한 시점에 소리가 납니다.
 
   const grouped = useMemo(() => {
     const map = new Map<number, string[]>();
