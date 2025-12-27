@@ -275,8 +275,6 @@ export default function Index() {
           <Recommendations
             items={openingInfo.recommendations}
             height={220}
-            onSelectMove={(move) => console.log("추천수:", move)}
-            onSelectBranch={(branch, parent) => console.log(`[${parent.move}] 분기: ${branch}`)}
           />
         </View>
       </View>
