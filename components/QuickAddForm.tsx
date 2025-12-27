@@ -1,0 +1,310 @@
+// components/QuickAddFor.tsx
+import {
+    Piece,
+    PiecesMap,
+    Square,
+    createInitialState,
+    getLegalMoves, handleSquarePress
+} from "@/scripts/Piece";
+// ✅ 에러 해결: legacy 경로에서 직접 import
+import { useSQLiteContext } from "expo-sqlite";
+import React, { useEffect, useMemo, useState } from "react";
+import { Alert, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { EvalType } from "./Icons";
+
+type Props = {
+    visible: boolean;
+    onClose: () => void;
+    currentFen: string;
+    lastMoveSan: string;
+    openingNameKo: string;
+    openingNameEn: string;
+    openingEval: string | number;
+    openingDesc: string | null;
+    onSaveSuccess: () => void;
+};
+
+const PIECES_ENUM: (Piece | "")[] = ["", "knight", "bishop", "rook", "queen", "king"];
+const PIECE_LABELS: Record<string, string> = { "": "P", knight: "N", bishop: "B", rook: "R", queen: "Q", king: "K" };
+const EVAL_TYPES: EvalType[] = ["best", "excellent", "book", "inaccuracy", "mistake", "blunder", "forced", "brilliant", "critical", "okay"];
+const PLACEHOLDER_COLOR = "#999"; // ✅ 시인성 확보
+
+export default function QuickAddForm({ visible, onClose, currentFen, lastMoveSan, openingNameKo, openingNameEn, openingEval, openingDesc, onSaveSuccess }: Props) {
+    const db = useSQLiteContext();
+    const [formKo, setFormKo] = useState("");
+    const [formEn, setFormEn] = useState("");
+    const [formEval, setFormEval] = useState("0.0");
+    const [formDesc, setFormDesc] = useState("");
+    const [formRecs, setFormRecs] = useState<{
+        piece: Piece | "";
+        sq: string;
+        isCastle: "O-O" | "O-O-O" | null;
+        name: string;
+        type: EvalType;
+        branchesText: string
+    }[]>([]);
+
+    // FEN 문자열을 기물 맵으로 변환하는 유틸
+    const parseFenToPieces = (fen: string): PiecesMap => {
+        const boardPart = fen.split(' ')[0];
+        const rows = boardPart.split('/');
+        const pieces: PiecesMap = {};
+        rows.forEach((row, rIdx) => {
+            let fIdx = 0;
+            for (const char of row) {
+                if (/\d/.test(char)) fIdx += parseInt(char);
+                else {
+                    const sq = `${String.fromCharCode(97 + fIdx)}${8 - rIdx}` as Square;
+                    const pieceMap: Record<string, Piece> = { k: 'king', q: 'queen', r: 'rook', b: 'bishop', n: 'knight', p: 'pawn' };
+                    pieces[sq] = { color: char === char.toUpperCase() ? 'white' : 'black', piece: pieceMap[char.toLowerCase()] };
+                    fIdx++;
+                }
+            }
+        });
+        return pieces;
+    };
+
+    const castlingInfo = useMemo(() => {
+        const parts = currentFen.split(' ');
+        const turnChar = parts[1];
+        const rights = parts[2];
+        const pieces = parseFenToPieces(currentFen);
+        const rank = turnChar === 'w' ? 1 : 8;
+        const isPathClear = (files: string[]) => files.every(f => !pieces[`${f}${rank}` as Square]);
+
+        return {
+            canK: (turnChar === 'w' ? rights.includes('K') : rights.includes('k')) && isPathClear(['f', 'g']),
+            canQ: (turnChar === 'w' ? rights.includes('Q') : rights.includes('q')) && isPathClear(['b', 'c', 'd'])
+        };
+    }, [currentFen]);
+
+    // ✅ 체크, 메이트, 잡기를 자동으로 계산하는 SAN 생성기
+    const calculateFinalSan = (rec: typeof formRecs[0]): string => {
+        if (rec.isCastle) return rec.isCastle;
+        if (!rec.sq) return "";
+
+        try {
+            const pieces = parseFenToPieces(currentFen);
+            const parts = currentFen.split(' ');
+            const turn = parts[1] === 'w' ? 'white' : 'black';
+
+            let fromSq: Square | null = null;
+            const state = { ...createInitialState(pieces), turn, castling: parts[2], ep: parts[3] as any };
+
+            for (const [sq, p] of Object.entries(pieces)) {
+                if (p.color === turn && p.piece === (rec.piece || "pawn")) {
+                    if (getLegalMoves(state as any, sq as Square).includes(rec.sq as Square)) {
+                        fromSq = sq as Square;
+                        break;
+                    }
+                }
+            }
+
+            if (!fromSq) return `${PIECE_LABELS[rec.piece]}${rec.sq}`;
+
+            // Piece.ts 로직으로 실제 이동 시뮬레이션
+            const next = handleSquarePress({ ...state, selected: fromSq, legalMoves: [rec.sq as Square] } as any, rec.sq as Square);
+            return next.moveHistory[next.moveHistory.length - 1].san.replace("... ", "");
+        } catch (e) {
+            return `${PIECE_LABELS[rec.piece]}${rec.sq}`;
+        }
+    };
+
+    useEffect(() => {
+        async function loadExistingData() {
+            if (!visible) return;
+            const baseFen = currentFen.split(' ').slice(0, 3).join(' ');
+            try {
+                const pos = await db.getFirstAsync<any>('SELECT * FROM positions WHERE fen = ?', [baseFen]);
+                if (pos) {
+                    setFormKo(pos.name_ko || ""); setFormEn(pos.name_en || "");
+                    setFormEval(String(pos.eval || "0.0")); setFormDesc(pos.desc || "");
+                } else {
+                    setFormKo(openingNameKo !== "알 수 없는 오프닝" ? openingNameKo : "");
+                    setFormEn(openingNameEn !== "Unknown" ? openingNameEn : "");
+                    setFormEval(String(openingEval)); setFormDesc(openingDesc || "");
+                }
+
+                const moves = await db.getAllAsync<any>('SELECT * FROM moves WHERE parent_fen = ? ORDER BY priority ASC', [baseFen]);
+                setFormRecs(moves.map(m => {
+                    const isCastle = m.move_san.includes("O-O") ? (m.move_san.includes("O-O-O") ? "O-O-O" : "O-O") : null;
+                    const branches = JSON.parse(m.branches || "[]");
+                    const pieceChar = m.move_san.match(/^[NBRQK]/)?.[0] || "";
+                    const pieceMap: any = { N: "knight", B: "bishop", R: "rook", Q: "queen", K: "king", "": "" };
+                    return {
+                        piece: isCastle ? "" : pieceMap[pieceChar],
+                        sq: isCastle ? "" : m.move_san.replace(/^[NBRQK]/, "").replace(/[+#x]/g, ""),
+                        isCastle, name: m.name || "", type: m.type as EvalType, branchesText: branches.join(", ")
+                    };
+                }));
+            } catch (e) { console.error(e); }
+        }
+        loadExistingData();
+    }, [visible, currentFen]);
+
+    const moveItem = (index: number, direction: 'up' | 'down') => {
+        const nextIdx = direction === 'up' ? index - 1 : index + 1;
+        if (nextIdx < 0 || nextIdx >= formRecs.length) return;
+        const next = [...formRecs];
+        [next[index], next[nextIdx]] = [next[nextIdx], next[index]];
+        setFormRecs(next);
+    };
+
+    const saveToDB = async () => {
+        const baseFen = currentFen.split(' ').slice(0, 3).join(' ');
+        const cleanSan = lastMoveSan.replace("... ", "");
+
+        // 1. 서버로 보낼 데이터 객체 생성
+        const syncData = {
+            position: {
+                fen: baseFen,
+                san: cleanSan,
+                name_ko: formKo,
+                name_en: formEn,
+                eval: formEval,
+                desc: formDesc
+            },
+            moves: formRecs.map((rec, i) => ({
+                parent_fen: baseFen,
+                move_san: calculateFinalSan(rec),
+                name: rec.name || formKo,
+                type: rec.type,
+                priority: i + 1,
+                branches: JSON.stringify(rec.branchesText.split(',').map(s => s.trim()).filter(s => s !== ""))
+            }))
+        };
+
+        try {
+            const response = await fetch(`http://221.162.44.120:8000/save_data`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(syncData),
+            });
+
+            if (response.ok) {
+                console.log("🚀 PC DB에 커밋 완료!");
+            }
+
+            onSaveSuccess();
+            onClose();
+        } catch (e) {
+            Alert.alert("❌ 저장 실패");
+        }
+    };
+
+    return (
+        <Modal visible={visible} transparent animationType="slide">
+            <View style={styles.overlay}>
+                <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalContainer}>
+                    <View style={styles.header}>
+                        <Text style={styles.title}>🛠 데이터 수정/추가</Text>
+                        <Pressable onPress={onClose}><Text style={styles.closeBtnText}>✕</Text></Pressable>
+                    </View>
+
+                    <ScrollView style={styles.formScroll} showsVerticalScrollIndicator={false}>
+                        <Text style={styles.label}>기본 정보</Text>
+                        <View style={styles.row}>
+                            <TextInput style={styles.input} placeholder="한글명" value={formKo} onChangeText={setFormKo} placeholderTextColor={PLACEHOLDER_COLOR} />
+                            <TextInput style={styles.input} placeholder="English" value={formEn} onChangeText={setFormEn} placeholderTextColor={PLACEHOLDER_COLOR} />
+                            <TextInput style={[styles.input, { width: 65 }]} placeholder="Eval" value={formEval} onChangeText={setFormEval} keyboardType="numeric" placeholderTextColor={PLACEHOLDER_COLOR} />
+                        </View>
+                        <TextInput style={[styles.input, styles.descInput]} placeholder="상세 설명" value={formDesc} onChangeText={setFormDesc} multiline placeholderTextColor={PLACEHOLDER_COLOR} />
+
+                        <View style={styles.recHeader}>
+                            <Text style={styles.label}>추천 수 - {formRecs.length}개</Text>
+                            <Pressable onPress={() => setFormRecs([...formRecs, { piece: "", sq: "", isCastle: null, name: "", type: "best", branchesText: "" }])} style={styles.miniAddBtn}>
+                                <Text style={styles.miniAddBtnText}>+ 추가</Text>
+                            </Pressable>
+                        </View>
+
+                        {formRecs.map((rec, idx) => (
+                            <View key={idx} style={styles.recCard}>
+                                <View style={styles.recRow}>
+                                    <View style={styles.pieceGroup}>
+                                        <Pressable onPress={() => {
+                                            const next = [...formRecs];
+                                            next[idx].isCastle = next[idx].isCastle === "O-O" ? null : "O-O";
+                                            if (next[idx].isCastle) { next[idx].piece = ""; next[idx].sq = ""; }
+                                            setFormRecs(next);
+                                        }} disabled={!castlingInfo.canK} style={[styles.miniBtn, rec.isCastle === "O-O" && styles.activeBtn, !castlingInfo.canK && styles.disabledBtn]}>
+                                            <Text style={styles.btnTxt}>O-O</Text>
+                                        </Pressable>
+                                        <Pressable onPress={() => {
+                                            const next = [...formRecs];
+                                            next[idx].isCastle = next[idx].isCastle === "O-O-O" ? null : "O-O-O";
+                                            if (next[idx].isCastle) { next[idx].piece = ""; next[idx].sq = ""; }
+                                            setFormRecs(next);
+                                        }} disabled={!castlingInfo.canQ} style={[styles.miniBtn, rec.isCastle === "O-O-O" && styles.activeBtn, !castlingInfo.canQ && styles.disabledBtn]}>
+                                            <Text style={styles.btnTxt}>O-O-O</Text>
+                                        </Pressable>
+                                        {PIECES_ENUM.map(p => (
+                                            <Pressable key={p} disabled={!!rec.isCastle} onPress={() => {
+                                                const next = [...formRecs];
+                                                next[idx].piece = p;
+                                                setFormRecs(next);
+                                            }} style={[styles.miniBtn, rec.piece === p && !rec.isCastle && styles.activeBtn, !!rec.isCastle && styles.disabledBtn]}>
+                                                <Text style={styles.btnTxt}>{PIECE_LABELS[p]}</Text>
+                                            </Pressable>
+                                        ))}
+                                    </View>
+                                    <TextInput style={[styles.sqInput, !!rec.isCastle && styles.disabledInput]} placeholder="좌표" value={rec.sq} editable={!rec.isCastle} onChangeText={(t) => {
+                                        const next = [...formRecs];
+                                        next[idx].sq = t.toLowerCase();
+                                        setFormRecs(next);
+                                    }} placeholderTextColor={PLACEHOLDER_COLOR} />
+                                    <View style={styles.orderActions}>
+                                        <Pressable onPress={() => moveItem(idx, 'up')} disabled={idx === 0} style={idx === 0 && { opacity: 0.2 }}><Text style={styles.orderIcon}>▲</Text></Pressable>
+                                        <Pressable onPress={() => moveItem(idx, 'down')} disabled={idx === formRecs.length - 1} style={idx === formRecs.length - 1 && { opacity: 0.2 }}><Text style={styles.orderIcon}>▼</Text></Pressable>
+                                        <Pressable onPress={() => setFormRecs(formRecs.filter((_, i) => i !== idx))}><Text style={{ color: '#EF4444', fontSize: 18 }}>✕</Text></Pressable>
+                                    </View>
+                                </View>
+                                <TextInput style={styles.nameInput} placeholder="추천수 이름" value={rec.name} onChangeText={(t) => { const next = [...formRecs]; next[idx].name = t; setFormRecs(next); }} placeholderTextColor={PLACEHOLDER_COLOR} />
+                                <TextInput style={styles.nameInput} placeholder="브랜치 (쉼표 구분)" value={rec.branchesText} onChangeText={(t) => { const next = [...formRecs]; next[idx].branchesText = t; setFormRecs(next); }} placeholderTextColor={PLACEHOLDER_COLOR} />
+                                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                                    {EVAL_TYPES.map(t => (
+                                        <Pressable key={t} onPress={() => { const next = [...formRecs]; next[idx].type = t; setFormRecs(next); }} style={[styles.typeBtn, rec.type === t && styles.activeTypeBtn]}><Text style={[styles.typeBtnTxt, rec.type === t && { color: '#000' }]}>{t}</Text></Pressable>
+                                    ))}
+                                </ScrollView>
+                            </View>
+                        ))}
+                        <View style={{ height: 100 }} />
+                    </ScrollView>
+                    <Pressable style={styles.saveBtn} onPress={saveToDB}><Text style={styles.saveBtnText}>저장 및 PC 동기화</Text></Pressable>
+                </KeyboardAvoidingView>
+            </View>
+        </Modal>
+    );
+}
+
+const styles = StyleSheet.create({
+    overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'flex-end' },
+    modalContainer: { backgroundColor: '#161B22', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, height: '90%' },
+    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+    title: { color: '#91b045', fontWeight: '900', fontSize: 20 },
+    closeBtnText: { color: '#8B949E', fontSize: 24 },
+    formScroll: { flex: 1 },
+    label: { color: '#8B949E', fontSize: 13, fontWeight: '700', marginBottom: 10 },
+    row: { flexDirection: 'row', gap: 8, marginBottom: 15 },
+    input: { flex: 1, backgroundColor: '#0D1117', color: '#E7EDF5', padding: 12, borderRadius: 8, fontSize: 14, borderWidth: 1, borderColor: '#30363D' },
+    descInput: { minHeight: 60, textAlignVertical: 'top', marginBottom: 15 },
+    recHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+    miniAddBtn: { backgroundColor: '#238636', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6 },
+    miniAddBtnText: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
+    recCard: { backgroundColor: '#1F242C', padding: 12, borderRadius: 12, marginBottom: 12, borderWidth: 1, borderColor: '#30363D' },
+    recRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
+    pieceGroup: { flexDirection: 'row', gap: 4, flex: 1, flexWrap: 'wrap' },
+    miniBtn: { paddingHorizontal: 8, paddingVertical: 6, backgroundColor: '#0D1117', borderRadius: 4, borderWidth: 1, borderColor: '#30363D' },
+    activeBtn: { backgroundColor: '#91b045', borderColor: '#91b045' },
+    disabledBtn: { opacity: 0.1 },
+    btnTxt: { color: '#fff', fontSize: 11, fontWeight: 'bold' },
+    sqInput: { width: 50, backgroundColor: '#0D1117', color: '#fff', fontSize: 14, borderRadius: 6, padding: 8, textAlign: 'center', borderWidth: 1, borderColor: '#30363D' },
+    disabledInput: { opacity: 0.1 },
+    orderActions: { flexDirection: 'row', alignItems: 'center', gap: 10, marginLeft: 5 },
+    orderIcon: { color: '#8B949E', fontSize: 16 },
+    nameInput: { backgroundColor: '#0D1117', color: '#E7EDF5', padding: 10, borderRadius: 6, fontSize: 13, marginBottom: 8, borderWidth: 1, borderColor: '#30363D' },
+    typeBtn: { paddingHorizontal: 10, paddingVertical: 5, marginRight: 6, borderRadius: 15, backgroundColor: '#21262D', borderWidth: 1, borderColor: '#30363D' },
+    activeTypeBtn: { backgroundColor: '#E7EDF5' },
+    typeBtnTxt: { color: '#8B949E', fontSize: 10, fontWeight: 'bold' },
+    saveBtn: { backgroundColor: '#91b045', padding: 18, borderRadius: 14, alignItems: 'center', marginTop: 10, marginBottom: 20 },
+    saveBtnText: { color: '#000', fontWeight: 'bold', fontSize: 16 },
+});

@@ -12,6 +12,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { EvalType } from "@/components/Icons";
 import PromotionModal from "@/components/PromotionModal";
+import QuickAddForm from "@/components/QuickAddForm";
 
 import { GameContext } from "./_layout";
 
@@ -59,46 +60,46 @@ export default function Index() {
   const canUndo = moveState.past.length > 0;
   const canRedo = moveState.future.length > 0;
 
+  async function fetchOpeningData() {
+    const baseFen = moveState.fen.split(' ').slice(0, 3).join(' ');
+
+    try {
+      const position = await db.getFirstAsync<{
+        name_ko: string;
+        name_en: string;
+        eval: string | number;
+        desc: string;
+      }>('SELECT name_ko, name_en, eval, desc FROM positions WHERE fen = ?', [baseFen]);
+
+      const moves = await db.getAllAsync<{
+        move_san: string;
+        name: string;
+        type: string;
+        branches: string;
+      }>('SELECT move_san, name, type, branches FROM moves WHERE parent_fen = ? ORDER BY priority ASC', [baseFen]);
+
+      if (position) {
+        setOpeningInfo({
+          name: position.name_ko || "이름 없음",
+          enName: position.name_en || "Unnamed",
+          eval: position.eval ?? 0,
+          desc: position.desc || null,
+          recommendations: moves.map(m => ({
+            move: m.move_san,
+            name: m.name,
+            type: m.type as EvalType,
+            branches: JSON.parse(m.branches || "[]")
+          }))
+        });
+      } else {
+        setOpeningInfo({ name: "알 수 없는 오프닝", enName: "Unknown", recommendations: [], eval: 0, desc: null });
+      }
+    } catch (e) {
+      console.error("DB 조회 오류:", e);
+    }
+  }
   // ✅ FEN 변경 시 DB 데이터 조회 로직
   useEffect(() => {
-    async function fetchOpeningData() {
-      const baseFen = moveState.fen.split(' ').slice(0, 3).join(' ');
-
-      try {
-        const position = await db.getFirstAsync<{
-          name_ko: string;
-          name_en: string;
-          eval: string | number;
-          desc: string;
-        }>('SELECT name_ko, name_en, eval, desc FROM positions WHERE fen = ?', [baseFen]);
-
-        const moves = await db.getAllAsync<{
-          move_san: string;
-          name: string;
-          type: string;
-          branches: string;
-        }>('SELECT move_san, name, type, branches FROM moves WHERE parent_fen = ? ORDER BY priority ASC', [baseFen]);
-
-        if (position) {
-          setOpeningInfo({
-            name: position.name_ko || "이름 없음",
-            enName: position.name_en || "Unnamed",
-            eval: position.eval ?? 0,
-            desc: position.desc || null,
-            recommendations: moves.map(m => ({
-              move: m.move_san,
-              name: m.name,
-              type: m.type as EvalType,
-              branches: JSON.parse(m.branches || "[]")
-            }))
-          });
-        } else {
-          setOpeningInfo({ name: "알 수 없는 오프닝", enName: "Unknown", recommendations: [], eval: 0, desc: null });
-        }
-      } catch (e) {
-        console.error("DB 조회 오류:", e);
-      }
-    }
 
     fetchOpeningData();
   }, [moveState.fen, db]);
@@ -174,8 +175,18 @@ export default function Index() {
     return Array.from(map.entries());
   }, [moveState.moveHistory]);
 
+  // ✅ 저장 성공 시 즉시 갱신
+  const handleSaveSuccess = () => {
+    fetchOpeningData();
+  };
+
+  const [addModalVisible, setAddModalVisible] = useState(false); // ✅ 모달 상태 추가
+
+
+
   return (
     <SafeAreaView style={styles.safe}>
+
       <View style={styles.container}>
         <ChessBoard
           size={boardSize}
@@ -243,6 +254,27 @@ export default function Index() {
             height={220}
           />
         </View>
+
+        {/* ✅ 우측 하단 플로팅 버튼 */}
+        <Pressable
+          style={styles.fab}
+          onPress={() => setAddModalVisible(true)}
+        >
+          <Text style={styles.fabText}>DB</Text>
+        </Pressable>
+
+        {/* ✅ 모달 컴포넌트 */}
+        <QuickAddForm
+          visible={addModalVisible}
+          onClose={() => setAddModalVisible(false)}
+          currentFen={moveState.fen}
+          lastMoveSan={moveState.moveHistory[moveState.moveHistory.length - 1]?.san || ""}
+          openingNameKo={openingInfo.name}
+          openingNameEn={openingInfo.enName}
+          openingEval={openingInfo.eval}
+          openingDesc={openingInfo.desc} // ✅ 현재 설명 전달
+          onSaveSuccess={handleSaveSuccess} // ✅ 콜백 전달
+        />
       </View>
     </SafeAreaView>
   );
@@ -276,5 +308,27 @@ const styles = StyleSheet.create({
     height: 32,
     marginTop: 10,
     justifyContent: 'center', // 텍스트가 한 줄일 때도 중앙 정렬
+  },
+  fab: {
+    position: 'absolute',
+    bottom: 24,
+    right: 24,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#91b045',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    zIndex: 999,
+  },
+  fabText: {
+    color: '#000',
+    fontWeight: '800',
+    fontSize: 16,
   },
 });

@@ -1,7 +1,7 @@
 // components/PromotionModal.tsx
+import { Color, Piece, PIECE_IMAGES } from '@/scripts/Piece';
 import React from 'react';
 import { Image, Pressable, StyleSheet, View } from 'react-native';
-import { Color, Piece, PIECE_IMAGES } from './ChessBoard';
 
 // ✅ Props 타입 정의
 interface PromotionModalProps {

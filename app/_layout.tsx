@@ -10,9 +10,7 @@ import { createContext, useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Text, View } from 'react-native';
 
 
-const PC_IP = "221.162.44.120"; // 본인 IP 확인
 const DB_NAME = "chessDB.sqlite";
-const SERVER_URL = `http://${PC_IP}:8000/assets/${DB_NAME}`;
 
 // ✅ 게임 상태를 유지하기 위한 컨텍스트 생성
 export const GameContext = createContext<{
@@ -102,30 +100,11 @@ export default function RootLayout() {
         const dbPath = `${docDir}SQLite/${DB_NAME}`;
         const dbDir = `${docDir}SQLite`;
 
-        try {
-            const headRes = await fetch(SERVER_URL, { method: 'HEAD' });
-            const currentModified = headRes.headers.get('Last-Modified');
-
-            if (currentModified !== lastModifiedRef.current) {
-                console.log("🔄 DB 변경 감지됨. 업데이트 중...");
-                const dirInfo = await FileSystem.getInfoAsync(dbDir);
-                if (!dirInfo.exists) await FileSystem.makeDirectoryAsync(dbDir, { intermediates: true });
-
-                const downloadRes = await FileSystem.downloadAsync(SERVER_URL, dbPath);
-                if (downloadRes.status === 200) {
-                    lastModifiedRef.current = currentModified;
-                    setDbKey(prev => prev + 1); // ✅ SQLiteProvider만 리로드됨
-                    if (!dbLoaded) setDbLoaded(true);
-                    console.log("⚡ DB 실시간 동기화 완료");
-                }
-            }
-        } catch (e) {
-            if (!dbLoaded) {
-                const asset = await Asset.fromModule(require('../assets/chessDB.sqlite')).downloadAsync();
-                if (asset.localUri) {
-                    await FileSystem.copyAsync({ from: asset.localUri, to: dbPath });
-                    setDbLoaded(true);
-                }
+        if (!dbLoaded) {
+            const asset = await Asset.fromModule(require('../assets/chessDB.sqlite')).downloadAsync();
+            if (asset.localUri) {
+                await FileSystem.copyAsync({ from: asset.localUri, to: dbPath });
+                setDbLoaded(true);
             }
         }
     }, [dbLoaded]);
@@ -140,8 +119,8 @@ export default function RootLayout() {
 
     useEffect(() => {
         syncDatabase();
-        const interval = setInterval(syncDatabase, 3000);
-        return () => clearInterval(interval);
+        // const interval = setInterval(syncDatabase, 3000);
+        // return () => clearInterval(interval);
     }, [syncDatabase]);
 
     if (!dbLoaded) {
