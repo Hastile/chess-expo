@@ -10,7 +10,7 @@ export type RecommendationItem = {
     id?: string;
     move: string;
     type: EvalType;
-    intent?: string;
+    name?: string;
     branches?: string[];
     eval?: number | string;
 };
@@ -68,18 +68,26 @@ export default function Recommendations({
                         const canExpand = !!it.branches?.length;
                         const IconComponent = MOVE_ICONS[it.type];
 
+                        // ✅ 행 클릭 시 수행할 함수 통합
+                        const handlePressRow = () => {
+                            onSelectMove?.(it.move, it);
+                            if (canExpand) {
+                                setOpenIndex(opened ? null : idx); // 👈 행 클릭 시 분기 토글
+                            }
+                        };
+
                         return (
                             <View key={`${it.move}-${idx}`} style={styles.rowWrapper}>
                                 <View style={styles.rowContainer}>
                                     <Pressable
-                                        onPress={() => onSelectMove?.(it.move, it)}
+                                        onPress={handlePressRow}
                                         style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
                                     >
                                         <View style={[styles.indicator, { backgroundColor: meta.color }]} />
                                         <View style={styles.textContainer}>
                                             <Text style={styles.moveText}>{it.move}</Text>
-                                            {it.intent && (
-                                                <Text style={styles.intentText} numberOfLines={1}>{it.intent}</Text>
+                                            {it.name && (
+                                                <Text style={styles.intentText} numberOfLines={1}>{it.name}</Text>
                                             )}
                                         </View>
                                         <Text style={[styles.evalLabel, { color: meta.color }]}>{meta.label}</Text>

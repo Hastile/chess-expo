@@ -73,9 +73,10 @@ export default function Index() {
 
         const moves = await db.getAllAsync<{
           move_san: string;
+          name: string;
           type: string;
           branches: string;
-        }>('SELECT move_san, type, branches FROM moves WHERE parent_fen = ?', [baseFen]);
+        }>('SELECT move_san, name, type, branches FROM moves WHERE parent_fen = ?', [baseFen]);
 
         if (position) {
           setOpeningInfo({
@@ -85,6 +86,7 @@ export default function Index() {
             desc: position.desc || null,
             recommendations: moves.map(m => ({
               move: m.move_san,
+              name: m.name,
               type: m.type as EvalType,
               branches: JSON.parse(m.branches || "[]")
             }))
