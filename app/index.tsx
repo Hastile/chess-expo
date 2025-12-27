@@ -171,7 +171,6 @@ export default function Index() {
   const checkPlayer = useAudioPlayer(require('../assets/sfx/check.wav'));
   const gameoverPlayer = useAudioPlayer(require('../assets/sfx/gameover.wav'));
 
-  // ✅ [수정] 인덱스 접근 에러 해결
   const playSound = (type: string) => {
     const soundMap: Record<string, any> = {
       move: movePlayer,
@@ -180,24 +179,49 @@ export default function Index() {
       check: checkPlayer,
       gameover: gameoverPlayer
     };
+
     const p = soundMap[type];
-    if (p) { p.seekTo(0); p.play(); }
+    if (p) {
+      console.log(`[Sound] Playing: ${type}`); // 👈 디버깅용 로그
+      p.volume = 1.0;
+      // ✅ [수정] seekTo(0) 이후 play()를 확실하게 호출
+      // 일부 기기에서는 재생 중일 때 seekTo와 play가 충돌할 수 있으므로 순서가 중요합니다.
+      p.seekTo(0);
+      p.play();
+    }
   };
 
+  // ✅ [수정] useRef를 통해 소리 중복 재생 및 누락 방지
   const prevMoveCount = useRef(moveState.moveHistory.length);
+
   useEffect(() => {
     const currentCount = moveState.moveHistory.length;
+
+    // 수가 늘어났을 때만 소리 재생
     if (currentCount > prevMoveCount.current) {
       const lastMove = moveState.moveHistory[currentCount - 1];
-      if (checkInfo.checkmated || checkInfo.isStalemate) playSound('gameover');
-      else if (checkInfo.inCheck) playSound('check');
-      else if (lastMove.san.includes('O-O')) playSound('castling');
-      else if (lastMove.san.includes('x')) playSound('capture');
-      else playSound('move');
-      setTimeout(() => { scrollRef.current?.scrollToEnd({ animated: true }); }, 100);
+
+      // ✅ [중요] 최신 checkInfo를 기반으로 사운드 결정
+      if (checkInfo.checkmated || checkInfo.isStalemate) {
+        playSound('gameover');
+      } else if (checkInfo.inCheck) {
+        playSound('check');
+      } else if (lastMove.san.includes('O-O')) {
+        playSound('castling');
+      } else if (lastMove.san.includes('x')) {
+        playSound('capture');
+      } else {
+        playSound('move');
+      }
+
+      setTimeout(() => {
+        scrollRef.current?.scrollToEnd({ animated: true });
+      }, 100);
     }
+
+    // 항상 최신 상태를 유지하도록 업데이트
     prevMoveCount.current = currentCount;
-  }, [moveState.moveHistory.length, checkInfo]);
+  }, [moveState.moveHistory.length, checkInfo]); // checkInfo도 종속성에 포함되어야 정확한 시점에 소리가 납니다.
 
   const grouped = useMemo(() => {
     const map = new Map<number, string[]>();
