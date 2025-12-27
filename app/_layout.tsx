@@ -1,5 +1,5 @@
 // app/_layout.tsx
-import { INITIAL_PIECES, MoveState, createInitialState, findKingSquare, isSquareAttacked, opposite } from '@/scripts/Piece';
+import { INITIAL_PIECES, MoveState, createInitialState } from '@/scripts/Piece';
 import { Asset } from 'expo-asset';
 import { useAudioPlayer } from "expo-audio";
 import * as FileSystem from 'expo-file-system/legacy';
@@ -38,30 +38,55 @@ export default function RootLayout() {
     const checkPlayer = useAudioPlayer(require('../assets/sfx/check.wav'), audioOptions);
     const gameoverPlayer = useAudioPlayer(require('../assets/sfx/gameover.wav'), audioOptions);
 
+    // ✅ playSound 함수 (기존과 동일)
     const playSound = useCallback((type: string) => {
-        const soundMap: any = { move: movePlayer, capture: capturePlayer, castling: castlingPlayer, check: checkPlayer, gameover: gameoverPlayer };
+        const soundMap: any = {
+            move: movePlayer,
+            capture: capturePlayer,
+            castling: castlingPlayer,
+            check: checkPlayer,
+            gameover: gameoverPlayer
+        };
         const p = soundMap[type];
-        if (p) { p.volume = 1.0; p.seekTo(0); p.play(); }
+        if (p) {
+            p.volume = 1.0;
+            p.seekTo(0);
+            p.play();
+        }
     }, [movePlayer, capturePlayer, castlingPlayer, checkPlayer, gameoverPlayer]);
 
-    // ✅ 무브 감지 및 소리 재생 로직을 _layout에서 직접 처리
+    // ✅ 소리 재생 로직 수정: 기보(SAN) 문자열을 기반으로 판단
     const prevCount = useRef(0);
     useEffect(() => {
         const currentCount = moveState.moveHistory.length;
+
         if (currentCount > prevCount.current) {
             const lastMove = moveState.moveHistory[currentCount - 1];
-            // 체크/메이트 정보 계산
-            const kingSq = findKingSquare(moveState.pieces, moveState.turn);
-            const inCheck = kingSq ? isSquareAttacked(moveState.pieces, kingSq, opposite(moveState.turn)) : false;
+            const san = lastMove.san;
 
-            if (lastMove.san.includes('#')) playSound('gameover');
-            else if (inCheck) playSound('check');
-            else if (lastMove.san.includes('O-O')) playSound('castling');
-            else if (lastMove.san.includes('x')) playSound('capture');
-            else playSound('move');
+            // 1. 우선순위: 게임 종료 (메이트)
+            if (san.includes('#')) {
+                playSound('gameover');
+            }
+            // 2. 체크
+            else if (san.includes('+')) {
+                playSound('check');
+            }
+            // 3. 캐슬링
+            else if (san.includes('O-O')) {
+                playSound('castling');
+            }
+            // 4. 기물 잡기
+            else if (san.includes('x')) {
+                playSound('capture');
+            }
+            // 5. 일반 이동
+            else {
+                playSound('move');
+            }
         }
         prevCount.current = currentCount;
-    }, [moveState.moveHistory.length]);
+    }, [moveState.moveHistory.length, playSound]); // ✅ playSound 의존성 추가
 
     const syncDatabase = useCallback(async () => {
         const docDir = FileSystem.documentDirectory;
