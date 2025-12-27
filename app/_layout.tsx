@@ -1,6 +1,7 @@
 // app/_layout.tsx
 import { INITIAL_PIECES, MoveState, createInitialState } from '@/scripts/Piece';
 import { Asset } from 'expo-asset';
+import * as Audio from 'expo-audio'; // ✅ 추가
 import { useAudioPlayer } from "expo-audio";
 import * as FileSystem from 'expo-file-system/legacy';
 import { Stack } from 'expo-router';
@@ -30,6 +31,10 @@ export default function RootLayout() {
     const [moveState, setMoveState] = useState<MoveState>(() => createInitialState(INITIAL_PIECES));
     const [orientation, setOrientation] = useState<"white" | "black">("white");
 
+    // useEffect(() => {
+    //     console.log(`[FEN] ${moveState.fen}`);
+    // }, [moveState.fen]); // FEN이 변경될 때마다 실행됨
+
     // ✅ 소리 플레이어를 여기에 정의하여 리마운트 영향 안 받게 함
     const audioOptions = { downloadFirst: true };
     const movePlayer = useAudioPlayer(require('../assets/sfx/move.wav'), audioOptions);
@@ -49,6 +54,7 @@ export default function RootLayout() {
         };
         const p = soundMap[type];
         if (p) {
+            // console.log(`[Audio] Playing: ${type}`); // ✅ 재생되는 소리 로그 출력
             p.volume = 1.0;
             p.seekTo(0);
             p.play();
@@ -63,6 +69,8 @@ export default function RootLayout() {
         if (currentCount > prevCount.current) {
             const lastMove = moveState.moveHistory[currentCount - 1];
             const san = lastMove.san;
+
+            // console.log(`[Chess] Last Move SAN: "${san}"`); // ✅ 생성된 기보 확인 로그
 
             // 1. 우선순위: 게임 종료 (메이트)
             if (san.includes('#')) {
@@ -122,13 +130,13 @@ export default function RootLayout() {
         }
     }, [dbLoaded]);
 
-    // useEffect(() => {
-    //     async function setup() {
-    //         try { await Audio.setAudioModeAsync({ playsInSilentMode: true }); }
-    //         catch (e) { console.error(e); }
-    //     }
-    //     setup();
-    // }, []);
+    useEffect(() => {
+        async function setup() {
+            try { await Audio.setAudioModeAsync({ playsInSilentMode: true, interruptionMode: 'doNotMix' }); }
+            catch (e) { console.error(e); }
+        }
+        setup();
+    }, []);
 
     useEffect(() => {
         syncDatabase();

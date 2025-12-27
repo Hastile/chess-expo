@@ -2,7 +2,7 @@
 import { INITIAL_PIECES, PIECE_IMAGES, PiecesMap, Square } from "@/scripts/Piece"; // ✅ 여기서 가져옴
 import { Image } from "expo-image";
 import React, { useMemo } from "react";
-import { Pressable, Image as RNImage, StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 import { EvalType, MOVE_ICONS } from "./Icons";
 
 type Props = {
@@ -67,10 +67,11 @@ export default function ChessBoard({
                                         )}
 
                                         {piece && (
-                                            <RNImage
+                                            <Image
                                                 source={PIECE_IMAGES[piece.color][piece.piece]}
                                                 style={{ width: squareSize * 0.9, height: squareSize * 0.9 }}
-                                                resizeMode="contain"
+                                                contentFit="contain"
+                                                transition={0}
                                             />
                                         )}
 
