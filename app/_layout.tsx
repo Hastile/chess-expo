@@ -3,12 +3,17 @@ import * as Audio from 'expo-audio'; // ✅ expo-av 대신 expo-audio 임포트
 import * as FileSystem from 'expo-file-system/legacy';
 import { Stack } from 'expo-router';
 import { SQLiteProvider } from 'expo-sqlite';
-import { useEffect, useState } from 'react';
+import { createContext, useEffect, useState } from 'react';
 import { ActivityIndicator, Text, View } from 'react-native';
+
+export const DatabaseContext = createContext({
+    refresh: async (useLocalServer?: boolean) => { }
+});
 
 export default function RootLayout() {
     const [dbLoaded, setDbLoaded] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [reloadKey, setReloadKey] = useState(0);
 
     useEffect(() => {
         // ✅ expo-audio를 사용하여 오디오 모드 설정
@@ -56,6 +61,7 @@ export default function RootLayout() {
                 }
 
                 setDbLoaded(true);
+                setReloadKey(prev => prev + 1);
             } catch (e: any) {
                 console.error("❌ DB 로드 중 오류 발생:", e);
                 setError(e.message);
@@ -82,7 +88,7 @@ export default function RootLayout() {
     }
 
     return (
-        <SQLiteProvider databaseName="chessDB.sqlite">
+        <SQLiteProvider key={reloadKey} databaseName="chessDB.sqlite">
             <Stack>
                 <Stack.Screen name="index" options={{ headerShown: false }} />
             </Stack>

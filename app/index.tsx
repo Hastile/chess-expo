@@ -76,7 +76,7 @@ export default function Index() {
           name: string;
           type: string;
           branches: string;
-        }>('SELECT move_san, name, type, branches FROM moves WHERE parent_fen = ?', [baseFen]);
+        }>('SELECT move_san, name, type, branches FROM moves WHERE parent_fen = ? ORDER BY priority ASC', [baseFen]);
 
         if (position) {
           setOpeningInfo({
@@ -164,12 +164,12 @@ export default function Index() {
     return { inCheck, checkmated: inCheck && !hasMoves, isStalemate: !inCheck && !hasMoves, kingSquare: kingSq };
   }, [moveState]);
 
-  // ✅ 오디오 설정
-  const movePlayer = useAudioPlayer(require('../assets/sfx/move.wav'));
-  const capturePlayer = useAudioPlayer(require('../assets/sfx/capture.wav'));
-  const castlingPlayer = useAudioPlayer(require('../assets/sfx/castling.wav'));
-  const checkPlayer = useAudioPlayer(require('../assets/sfx/check.wav'));
-  const gameoverPlayer = useAudioPlayer(require('../assets/sfx/gameover.wav'));
+  const audioOptions = { downloadFirst: true };
+  const movePlayer = useAudioPlayer(require('../assets/sfx/move.wav'), audioOptions);
+  const capturePlayer = useAudioPlayer(require('../assets/sfx/capture.wav'), audioOptions);
+  const castlingPlayer = useAudioPlayer(require('../assets/sfx/castling.wav'), audioOptions);
+  const checkPlayer = useAudioPlayer(require('../assets/sfx/check.wav'), audioOptions);
+  const gameoverPlayer = useAudioPlayer(require('../assets/sfx/gameover.wav'), audioOptions);
 
   const playSound = (type: string) => {
     const soundMap: Record<string, any> = {
@@ -182,12 +182,16 @@ export default function Index() {
 
     const p = soundMap[type];
     if (p) {
-      console.log(`[Sound] Playing: ${type}`); // 👈 디버깅용 로그
-      p.volume = 1.0;
-      // ✅ [수정] seekTo(0) 이후 play()를 확실하게 호출
-      // 일부 기기에서는 재생 중일 때 seekTo와 play가 충돌할 수 있으므로 순서가 중요합니다.
-      p.seekTo(0);
-      p.play();
+      // ✅ [로그] 프로퍼티를 확인하기 위해 객체 전체를 출력해봅니다.
+      // console.log(`[Sound] Playing: ${type}, Volume: ${p.volume}`);
+
+      try {
+        p.volume = 1.0;
+        p.seekTo(0); // ✅ 처음으로 되감기
+        p.play();    // ✅ 즉시 재생 시도
+      } catch (e) {
+        console.error(`[Sound] ${type} 재생 실패:`, e);
+      }
     }
   };
 
