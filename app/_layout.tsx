@@ -10,7 +10,9 @@ import { createContext, useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Text, View } from 'react-native';
 
 
+const PC_IP = "221.162.44.120";
 const DB_NAME = "chessDB.sqlite";
+const SERVER_URL = `http://${PC_IP}:8000/assets/${DB_NAME}`;
 
 // ✅ 게임 상태를 유지하기 위한 컨텍스트 생성
 export const GameContext = createContext<{
@@ -19,6 +21,10 @@ export const GameContext = createContext<{
     orientation: "white" | "black";
     setOrientation: React.Dispatch<React.SetStateAction<"white" | "black">>;
 } | null>(null);
+
+export const syncBridge = {
+    updateLastModified: (val: string | null) => { }
+};
 
 export default function RootLayout() {
     const [dbLoaded, setDbLoaded] = useState(false);
@@ -32,6 +38,11 @@ export default function RootLayout() {
     // useEffect(() => {
     //     console.log(`[FEN] ${moveState.fen}`);
     // }, [moveState.fen]); // FEN이 변경될 때마다 실행됨
+
+    // ✅ 브릿지 함수 연결
+    syncBridge.updateLastModified = (val) => {
+        lastModifiedRef.current = val;
+    };
 
     // ✅ 소리 플레이어를 여기에 정의하여 리마운트 영향 안 받게 함
     const audioOptions = { downloadFirst: true };
@@ -100,14 +111,36 @@ export default function RootLayout() {
         const dbPath = `${docDir}SQLite/${DB_NAME}`;
         const dbDir = `${docDir}SQLite`;
 
-        if (!dbLoaded) {
-            const asset = await Asset.fromModule(require('../assets/chessDB.sqlite')).downloadAsync();
-            if (asset.localUri) {
-                await FileSystem.copyAsync({ from: asset.localUri, to: dbPath });
-                setDbLoaded(true);
+        try {
+            const headRes = await fetch(SERVER_URL, { method: 'HEAD' });
+            const currentModified = headRes.headers.get('Last-Modified');
+
+            // ✅ 서버 시간과 내가 가진 시간이 다를 때만 다운로드 (앱 재시작 트리거)
+            if (currentModified && currentModified !== lastModifiedRef.current) {
+                console.log("🔄 외부 변경 감지됨. DB 업데이트 중...");
+                const downloadRes = await FileSystem.downloadAsync(SERVER_URL, dbPath);
+                if (downloadRes.status === 200) {
+                    lastModifiedRef.current = currentModified;
+                    setDbKey(prev => prev + 1); // 리마운트 발생
+                    if (!dbLoaded) setDbLoaded(true);
+                }
+            }
+        } catch (e) {
+            if (!dbLoaded) {
+                const asset = await Asset.fromModule(require('../assets/chessDB.sqlite')).downloadAsync();
+                if (asset.localUri) {
+                    await FileSystem.copyAsync({ from: asset.localUri, to: dbPath });
+                    setDbLoaded(true);
+                }
             }
         }
     }, [dbLoaded]);
+
+    useEffect(() => {
+        syncDatabase();
+        // const interval = setInterval(syncDatabase, 3000);
+        // return () => clearInterval(interval);
+    }, [syncDatabase]);
 
     useEffect(() => {
         async function setup() {
@@ -116,12 +149,6 @@ export default function RootLayout() {
         }
         setup();
     }, []);
-
-    useEffect(() => {
-        syncDatabase();
-        // const interval = setInterval(syncDatabase, 3000);
-        // return () => clearInterval(interval);
-    }, [syncDatabase]);
 
     if (!dbLoaded) {
         return (

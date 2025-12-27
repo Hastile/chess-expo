@@ -1,12 +1,6 @@
-// components/QuickAddFor.tsx
-import {
-    Piece,
-    PiecesMap,
-    Square,
-    createInitialState,
-    getLegalMoves, handleSquarePress
-} from "@/scripts/Piece";
-// ✅ 에러 해결: legacy 경로에서 직접 import
+// components/QuickAddForm.tsx
+import { syncBridge } from "@/app/_layout"; // ✅ 브릿지 임포트
+import { Piece, PiecesMap, Square, createInitialState, getLegalMoves, handleSquarePress } from "@/scripts/Piece";
 import { useSQLiteContext } from "expo-sqlite";
 import React, { useEffect, useMemo, useState } from "react";
 import { Alert, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
@@ -154,27 +148,29 @@ export default function QuickAddForm({ visible, onClose, currentFen, lastMoveSan
         const baseFen = currentFen.split(' ').slice(0, 3).join(' ');
         const cleanSan = lastMoveSan.replace("... ", "");
 
-        // 1. 서버로 보낼 데이터 객체 생성
+        // 1. 서버에 보낼 JSON 데이터 구성
         const syncData = {
-            position: {
-                fen: baseFen,
-                san: cleanSan,
-                name_ko: formKo,
-                name_en: formEn,
-                eval: formEval,
-                desc: formDesc
-            },
+            position: { fen: baseFen, san: cleanSan, name_ko: formKo, name_en: formEn, eval: formEval, desc: formDesc },
             moves: formRecs.map((rec, i) => ({
-                parent_fen: baseFen,
                 move_san: calculateFinalSan(rec),
                 name: rec.name || formKo,
                 type: rec.type,
                 priority: i + 1,
-                branches: JSON.stringify(rec.branchesText.split(',').map(s => s.trim()).filter(s => s !== ""))
+                branches: JSON.stringify(rec.branchesText.split(',').map((s: any) => s.trim()).filter((s: any) => s !== ""))
             }))
         };
 
         try {
+            // A. 로컬 DB 먼저 저장
+            await db.withTransactionAsync(async () => {
+                await db.runAsync(`INSERT OR REPLACE INTO positions (fen, san, name_ko, name_en, eval, desc) VALUES (?, ?, ?, ?, ?, ?)`, [baseFen, cleanSan, formKo, formEn, formEval, formDesc]);
+                await db.runAsync('DELETE FROM moves WHERE parent_fen = ?', [baseFen]);
+                for (const m of syncData.moves) {
+                    await db.runAsync(`INSERT INTO moves (parent_fen, move_san, name, type, priority, branches) VALUES (?, ?, ?, ?, ?, ?)`, [baseFen, m.move_san, m.name, m.type, m.priority, m.branches]);
+                }
+            });
+
+            // B. Flask 서버로 전송 및 시간 동기화
             const response = await fetch(`http://221.162.44.120:8000/save_data`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -182,7 +178,11 @@ export default function QuickAddForm({ visible, onClose, currentFen, lastMoveSan
             });
 
             if (response.ok) {
-                console.log("🚀 PC DB에 커밋 완료!");
+                const resJson = await response.json();
+                // ✅ 핵심: 서버가 응답으로 준 시간을 RootLayout에 즉시 반영
+                // 이렇게 하면 RootLayout의 syncDatabase가 "어? 시간이 서버랑 똑같네?" 하고 다운로드를 안 함.
+                syncBridge.updateLastModified(resJson.last_modified);
+                console.log("🚀 PC 커밋 및 시간 동기화 완료");
             }
 
             onSaveSuccess();
@@ -197,7 +197,7 @@ export default function QuickAddForm({ visible, onClose, currentFen, lastMoveSan
             <View style={styles.overlay}>
                 <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalContainer}>
                     <View style={styles.header}>
-                        <Text style={styles.title}>🛠 데이터 수정/추가</Text>
+                        <Text style={styles.title}>🛠 데이터 수정</Text>
                         <Pressable onPress={onClose}><Text style={styles.closeBtnText}>✕</Text></Pressable>
                     </View>
 
@@ -269,7 +269,7 @@ export default function QuickAddForm({ visible, onClose, currentFen, lastMoveSan
                         ))}
                         <View style={{ height: 100 }} />
                     </ScrollView>
-                    <Pressable style={styles.saveBtn} onPress={saveToDB}><Text style={styles.saveBtnText}>저장 및 PC 동기화</Text></Pressable>
+                    <Pressable style={styles.saveBtn} onPress={saveToDB}><Text style={styles.saveBtnText}>저장</Text></Pressable>
                 </KeyboardAvoidingView>
             </View>
         </Modal>
