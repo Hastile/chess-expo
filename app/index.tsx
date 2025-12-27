@@ -1,4 +1,4 @@
-import ChessBoard, { INITIAL_PIECES, Square } from "@/components/ChessBoard";
+import ChessBoard, { INITIAL_PIECES, Piece, Square } from "@/components/ChessBoard";
 import EvalBar from "@/components/EvalBar";
 import Recommendations from "@/components/Recommendations";
 import { findKingSquare, getLegalMoves, isSquareAttacked, opposite } from "@/scripts/Piece";
@@ -12,13 +12,15 @@ import { EvalType } from "@/components/Icons";
 import PromotionModal from "@/components/PromotionModal";
 import openingData from "@/scripts/opening.json";
 
+
 import {
   createInitialState,
   handleSquarePress,
+  isPawnPromotion,
   MoveState,
   redo,
   resetGame,
-  undo,
+  undo
 } from "@/scripts/Piece";
 
 export default function Index() {
@@ -68,7 +70,7 @@ export default function Index() {
     };
   }, [moveState.fen]);
 
-  const handlePromotionSelect = (piece: string) => {
+  const handlePromotionSelect = (piece: Piece) => {
     if (!pendingPromotion) return;
 
     setMoveState(prev => {

@@ -188,6 +188,13 @@ export function redo(state: MoveState): MoveState {
     return { ...state, ...next, selected: null, legalMoves: [], past: [...state.past, snapCore(state)], future };
 }
 
+export function isPawnPromotion(state: MoveState, from: Square, to: Square): boolean {
+    const piece = state.pieces[from];
+    if (!piece || piece.piece !== "pawn") return false;
+    const { rank } = toCoord(to);
+    return (piece.color === "white" && rank === 7) || (piece.color === "black" && rank === 0);
+}
+
 /* ===== Castling helpers ===== */
 function hasRight(castling: string, ch: string) { return castling !== "-" && castling.includes(ch); }
 function stripRights(castling: string, remove: string[]) {
@@ -213,12 +220,13 @@ function updateRightsOnMove(castling: string, from: Square, to: Square, mover: {
 /* ===== SAN (simplified) ===== */
 const PIECE_LETTER: Record<Piece, string> = { king: "K", queen: "Q", rook: "R", bishop: "B", knight: "N", pawn: "" };
 
+
 function buildSan(opts: {
     mover: { piece: Piece; color: Color };
     from: Square; to: Square; capture: boolean;
     isCastle?: "O-O" | "O-O-O";
     check?: boolean; mate?: boolean; // ✅ 체크/메이트 여부 추가
-    promotion?: string;
+    promotion?: Piece;
 }) {
     const prefix = opts.mover.color === "black" ? "... " : "";
     let base = "";
@@ -230,7 +238,7 @@ function buildSan(opts: {
     }
 
     if (opts.promotion) {
-        base += "=" + opts.promotion.toUpperCase();
+        base += "=" + PIECE_LETTER[opts.promotion];
     }
 
     // ✅ 기호 추가: 메이트가 우선
@@ -253,7 +261,7 @@ function calcEnPassant(from: Square, to: Square, mover: { color: Color; piece: P
 /* ===== Move simulation ===== */
 type SimResult = { pieces: PiecesMap; capture: boolean; isCastle?: "O-O" | "O-O-O"; didEnPassant?: boolean; };
 
-function simulateMove(state: MoveState, from: Square, to: Square): SimResult | null {
+function simulateMove(state: MoveState, from: Square, to: Square, promotion?: Piece): SimResult | null {
     const pieces = state.pieces; const mover = pieces[from]; if (!mover) return null;
     const a = toCoord(from); const b = toCoord(to); const dx = b.file - a.file; const dy = b.rank - a.rank;
     const next = clonePieces(pieces); const target = next[to];
@@ -279,7 +287,12 @@ function simulateMove(state: MoveState, from: Square, to: Square): SimResult | n
         }
         return null;
     }
-    delete next[from]; next[to] = mover;
+    delete next[from];
+    if (mover.piece === "pawn" && (b.rank === 0 || b.rank === 7)) {
+        next[to] = { color: mover.color, piece: (promotion || "queen") as Piece };
+    } else {
+        next[to] = mover;
+    }
     return { pieces: next, capture: !!target };
 }
 
@@ -336,7 +349,7 @@ export function getLegalMoves(state: MoveState, from: Square): Square[] {
 }
 
 /* ===== Public: press handler ===== */
-export function handleSquarePress(state: MoveState, square: Square): MoveState {
+export function handleSquarePress(state: MoveState, square: Square, promotion?: Piece): MoveState {
     const pieces = state.pieces; const clicked = pieces[square];
     if (!state.selected) {
         if (clicked && clicked.color === state.turn) return { ...state, selected: square, legalMoves: getLegalMoves(state, square) };
@@ -346,7 +359,7 @@ export function handleSquarePress(state: MoveState, square: Square): MoveState {
     if (clicked && clicked.color === selectedPiece.color) return { ...state, selected: square, legalMoves: getLegalMoves(state, square) };
     if (!state.legalMoves.includes(square)) return { ...state, selected: null, legalMoves: [] };
 
-    const sim = simulateMove(state, selected, square)!;
+    const sim = simulateMove(state, selected, square, promotion)!;
     const captureTarget = pieces[square];
     const nextCastling = updateRightsOnMove(state.castling, selected, square, selectedPiece, captureTarget);
     const nextEp = calcEnPassant(selected, square, selectedPiece);
@@ -370,7 +383,7 @@ export function handleSquarePress(state: MoveState, square: Square): MoveState {
         }
     } else { hasMoves = true; }
 
-    const san = buildSan({ mover: selectedPiece, from: selected, to: square, capture: sim.capture, isCastle: sim.isCastle, check: inCheck, mate: (inCheck && !hasMoves) });
+    const san = buildSan({ mover: selectedPiece, from: selected, to: square, capture: sim.capture, isCastle: sim.isCastle, check: inCheck, mate: (inCheck && !hasMoves), promotion: promotion });
 
     const nextCore = { ...nextBase, moveHistory: [...state.moveHistory, { ply: state.fullmove, san }] };
     const nextFen = toFEN(nextCore);

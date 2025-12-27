@@ -1,17 +1,25 @@
-// components/PromotionModal.tsx (새로 생성)
+// components/PromotionModal.tsx
 import React from 'react';
 import { Image, Pressable, StyleSheet, View } from 'react-native';
+import { Color, Piece, PIECE_IMAGES } from './ChessBoard';
 
-const PIECES = ['queen', 'rook', 'bishop', 'knight'];
+// ✅ Props 타입 정의
+interface PromotionModalProps {
+    color: Color;
+    onSelect: (piece: Piece) => void;
+}
 
-export default function PromotionModal({ color, onSelect }) {
+const PROMOTION_PIECES: Piece[] = ['queen', 'rook', 'bishop', 'knight'];
+
+export default function PromotionModal({ color, onSelect }: PromotionModalProps) {
     return (
         <View style={styles.overlay}>
             <View style={styles.container}>
-                {PIECES.map((p) => (
+                {PROMOTION_PIECES.map((p) => (
                     <Pressable key={p} onPress={() => onSelect(p)} style={styles.pieceBtn}>
                         <Image
-                            source={/* 기존 PIECE_IMAGES 로직 활용 */}
+                            // ✅ ChessBoard에서 정의된 PIECE_IMAGES 활용
+                            source={PIECE_IMAGES[color][p]}
                             style={styles.pieceImg}
                         />
                     </Pressable>
@@ -22,8 +30,8 @@ export default function PromotionModal({ color, onSelect }) {
 }
 
 const styles = StyleSheet.create({
-    overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', zIndex: 100 },
-    container: { flexDirection: 'row', backgroundColor: '#262421', padding: 10, borderRadius: 8 },
-    pieceBtn: { padding: 10 },
-    pieceImg: { width: 50, height: 50 }
+    overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', zIndex: 100 },
+    container: { flexDirection: 'row', backgroundColor: '#262421', padding: 15, borderRadius: 12, borderWidth: 1, borderColor: '#444' },
+    pieceBtn: { padding: 8, marginHorizontal: 4, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 8 },
+    pieceImg: { width: 56, height: 56 }
 });
