@@ -1,53 +1,62 @@
 import { Asset } from 'expo-asset';
-import * as FileSystem from 'expo-file-system';
-import { Paths } from 'expo-file-system'; // ✅ SDK 54 전용 신규 API
+import * as FileSystem from 'expo-file-system/legacy';
 import { Stack } from 'expo-router';
 import { SQLiteProvider } from 'expo-sqlite';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, Text, View } from 'react-native';
 
 export default function RootLayout() {
     const [dbLoaded, setDbLoaded] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         async function loadDatabase() {
             const dbName = "chessDB.sqlite";
+            const docDir = FileSystem.documentDirectory;
+            if (!docDir) return;
 
-            // ✅ SDK 54 스타일: Paths.document를 사용합니다.
-            // Paths.document.uri는 기존의 documentDirectory와 동일한 string을 반환합니다.
-            const docDir = Paths.document.uri;
             const dbDir = `${docDir}SQLite`;
             const dbPath = `${dbDir}/${dbName}`;
 
             try {
-                // 1. SQLite 폴더가 없으면 생성 (경로 확인)
+                // 1. SQLite 폴더 생성 확인
                 const dirInfo = await FileSystem.getInfoAsync(dbDir);
                 if (!dirInfo.exists) {
                     await FileSystem.makeDirectoryAsync(dbDir, { intermediates: true });
                 }
 
-                // 2. 파일 복사 여부 확인
-                const fileInfo = await FileSystem.getInfoAsync(dbPath);
-                if (!fileInfo.exists) {
-                    // ✅ assets/chessDB.sqlite가 존재해야 합니다.
-                    const asset = await Asset.fromModule(require('../assets/chessDB.sqlite')).downloadAsync();
-                    if (asset.localUri) {
-                        await FileSystem.copyAsync({
-                            from: asset.localUri,
-                            to: dbPath,
-                        });
-                    }
+                // ✅ [변경] 기존 파일을 무조건 삭제하여 최신 에셋으로 교체합니다.
+                console.log("기존 DB 삭제 및 최신 에셋 복사 시작...");
+                await FileSystem.deleteAsync(dbPath, { idempotent: true });
+
+                // 2. 에셋에서 최신 DB 복사
+                const asset = await Asset.fromModule(require('../assets/chessDB.sqlite')).downloadAsync();
+                if (asset.localUri) {
+                    await FileSystem.copyAsync({
+                        from: asset.localUri,
+                        to: dbPath,
+                    });
+                    console.log("✅ 최신 DB 복사 완료");
                 }
+
                 setDbLoaded(true);
-            } catch (error) {
-                console.error("DB 로드 중 오류 발생:", error);
+            } catch (e: any) {
+                console.error("❌ DB 로드 중 오류 발생:", e);
+                setError(e.message);
             }
         }
 
         loadDatabase();
     }, []);
 
-    // DB가 준비될 때까지 로딩 화면을 보여줍니다.
+    if (error) {
+        return (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0B0F14' }}>
+                <Text style={{ color: '#EF4444' }}>DB 로드 실패: {error}</Text>
+            </View>
+        );
+    }
+
     if (!dbLoaded) {
         return (
             <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0B0F14' }}>
