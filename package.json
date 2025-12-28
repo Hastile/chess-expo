@@ -17,6 +17,7 @@
     "@react-navigation/native": "^7.1.8",
     "chess.js": "^1.4.0",
     "expo": "~54.0.30",
+    "expo-asset": "~12.0.12",
     "expo-audio": "~1.1.1",
     "expo-av": "~16.0.8",
     "expo-constants": "~18.0.12",
@@ -46,6 +47,7 @@
     "@types/react": "~19.1.0",
     "eslint": "^9.25.0",
     "eslint-config-expo": "~10.0.0",
+    "tsx": "^4.21.0",
     "typescript": "~5.9.2"
   },
   "private": true

@@ -182,7 +182,16 @@ export default function Index() {
 
   const [addModalVisible, setAddModalVisible] = useState(false); // ✅ 모달 상태 추가
 
-
+  const currentPgn = useMemo(() => {
+    const pgnParts: string[] = [];
+    for (let i = 0; i < moveState.moveHistory.length; i += 2) {
+      const moveNum = Math.floor(i / 2) + 1;
+      const whiteMove = moveState.moveHistory[i].san;
+      const blackMove = moveState.moveHistory[i + 1]?.san.replace("... ", "") || "";
+      pgnParts.push(`${moveNum}. ${whiteMove}${blackMove ? " " + blackMove : ""}`);
+    }
+    return pgnParts.join(" ");
+  }, [moveState.moveHistory]);
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -268,12 +277,17 @@ export default function Index() {
           visible={addModalVisible}
           onClose={() => setAddModalVisible(false)}
           currentFen={moveState.fen}
+          // ✅ fenHistory에서 현재 수 바로 전의 FEN을 부모 FEN으로 전달합니다.
+          parentFen={moveState.fenHistory.length > 1
+            ? moveState.fenHistory[moveState.fenHistory.length - 2]
+            : moveState.fenHistory[0]}
           lastMoveSan={moveState.moveHistory[moveState.moveHistory.length - 1]?.san || ""}
+          currentPgn={currentPgn}
           openingNameKo={openingInfo.name}
           openingNameEn={openingInfo.enName}
           openingEval={openingInfo.eval}
-          openingDesc={openingInfo.desc} // ✅ 현재 설명 전달
-          onSaveSuccess={handleSaveSuccess} // ✅ 콜백 전달
+          openingDesc={openingInfo.desc}
+          onSaveSuccess={handleSaveSuccess}
         />
       </View>
     </SafeAreaView>

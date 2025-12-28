@@ -1,6 +1,8 @@
 // components/QuickAddForm.tsx
 import { syncBridge } from "@/app/_layout"; // ✅ 브릿지 임포트
 import { Piece, PiecesMap, Square, createInitialState, getLegalMoves, handleSquarePress } from "@/scripts/Piece";
+import { Asset } from "expo-asset";
+import * as FileSystem from 'expo-file-system/legacy';
 import { useSQLiteContext } from "expo-sqlite";
 import React, { useEffect, useMemo, useState } from "react";
 import { Alert, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
@@ -10,7 +12,9 @@ type Props = {
     visible: boolean;
     onClose: () => void;
     currentFen: string;
+    parentFen: string;
     lastMoveSan: string;
+    currentPgn: string;
     openingNameKo: string;
     openingNameEn: string;
     openingEval: string | number;
@@ -23,7 +27,7 @@ const PIECE_LABELS: Record<string, string> = { "": "P", knight: "N", bishop: "B"
 const EVAL_TYPES: EvalType[] = ["best", "excellent", "book", "inaccuracy", "mistake", "blunder", "forced", "brilliant", "critical", "okay"];
 const PLACEHOLDER_COLOR = "#999"; // ✅ 시인성 확보
 
-export default function QuickAddForm({ visible, onClose, currentFen, lastMoveSan, openingNameKo, openingNameEn, openingEval, openingDesc, onSaveSuccess }: Props) {
+export default function QuickAddForm({ visible, onClose, currentFen, parentFen, lastMoveSan, currentPgn, openingNameKo, openingNameEn, openingEval, openingDesc, onSaveSuccess }: Props) {
     const db = useSQLiteContext();
     const [formKo, setFormKo] = useState("");
     const [formEn, setFormEn] = useState("");
@@ -104,22 +108,60 @@ export default function QuickAddForm({ visible, onClose, currentFen, lastMoveSan
         }
     };
 
+    // ✅ FEN 비교용 유틸 (수 번호 제외)
+    const getBaseFen = (f: string) => f.split(' ').slice(0, 3).join(' ');
+
+    // ✅ ECO TSV에서 영어 이름 검색 함수
+    // ✅ eco.tsv에서 PGN 일치 여부로 영어 이름 찾기
+    const lookupEnNameFromEco = async (pgn: string) => {
+        try {
+            const asset = Asset.fromModule(require('@/assets/eco.tsv'));
+            if (!asset.localUri) await asset.downloadAsync();
+            const content = await FileSystem.readAsStringAsync(asset.localUri || asset.uri);
+            const lines = content.split('\n');
+            const targetPgn = pgn.trim();
+
+            for (const line of lines) {
+                const parts = line.split('\t');
+                if (parts.length >= 3 && parts[2].trim() === targetPgn) {
+                    return parts[1].trim(); // name 컬럼 반환
+                }
+            }
+        } catch (e) { console.log("ECO lookup error:", e); }
+        return null;
+    };
+
+
+
     useEffect(() => {
         async function loadExistingData() {
             if (!visible) return;
-            const baseFen = currentFen.split(' ').slice(0, 3).join(' ');
+            const currentBase = getBaseFen(currentFen);
+            const parentBase = getBaseFen(parentFen);
+            const cleanLastMove = lastMoveSan.replace("... ", "");
             try {
-                const pos = await db.getFirstAsync<any>('SELECT * FROM positions WHERE fen = ?', [baseFen]);
+                const pos = await db.getFirstAsync<any>('SELECT * FROM positions WHERE fen = ?', [currentBase]);
                 if (pos) {
                     setFormKo(pos.name_ko || ""); setFormEn(pos.name_en || "");
                     setFormEval(String(pos.eval || "0.0")); setFormDesc(pos.desc || "");
                 } else {
-                    setFormKo(openingNameKo !== "알 수 없는 오프닝" ? openingNameKo : "");
-                    setFormEn(openingNameEn !== "Unknown" ? openingNameEn : "");
-                    setFormEval(String(openingEval)); setFormDesc(openingDesc || "");
+                    // 1. 한글 이름: 이전 포지션의 '추천 수' 목록에서 내가 둔 수의 이름을 찾음
+                    const prevMove = await db.getFirstAsync<any>(
+                        'SELECT name FROM moves WHERE parent_fen = ? AND move_san = ?',
+                        [parentBase, cleanLastMove]
+                    );
+                    // 추천 수에 적어둔 이름이 있다면 가져오고, 없으면 기존 오프닝 정보 유지
+                    setFormKo(prevMove?.name || (openingNameKo !== "알 수 없는 오프닝" ? openingNameKo : ""));
+
+                    // 2. 영어 이름: eco.tsv 파일에서 현재 FEN 매칭
+                    const ecoName = await lookupEnNameFromEco(currentPgn);
+                    setFormEn(ecoName || (openingNameEn !== "Unknown" ? openingNameEn : ""));
+
+                    setFormEval(String(openingEval));
+                    setFormDesc(openingDesc || "");
                 }
 
-                const moves = await db.getAllAsync<any>('SELECT * FROM moves WHERE parent_fen = ? ORDER BY priority ASC', [baseFen]);
+                const moves = await db.getAllAsync<any>('SELECT * FROM moves WHERE parent_fen = ? ORDER BY priority ASC', [currentBase]);
                 setFormRecs(moves.map(m => {
                     const isCastle = m.move_san.includes("O-O") ? (m.move_san.includes("O-O-O") ? "O-O-O" : "O-O") : null;
                     const branches = JSON.parse(m.branches || "[]");
