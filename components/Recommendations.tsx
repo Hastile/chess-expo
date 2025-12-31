@@ -52,7 +52,7 @@ export interface RecommendationsProps {
 
 export default function Recommendations({
     items = [],
-    height = 280,
+    height = 200,
     onSelectMove,
     onSelectBranch, // 👈 추가됨
 }: RecommendationsProps) {

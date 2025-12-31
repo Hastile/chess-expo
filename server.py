@@ -29,9 +29,9 @@ def save_data():
 
         # 1. Position 저장
         cursor.execute('''
-            INSERT OR REPLACE INTO positions (fen, san, name_ko, name_en, eval, desc)
-            VALUES (?, ?, ?, ?, ?, ?)
-        ''', (pos['fen'], pos['san'], pos['name_ko'], pos['name_en'], pos['eval'], pos['desc']))
+            INSERT OR REPLACE INTO positions (fen, san, name_ko, name_en, eval)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (pos['fen'], pos['san'], pos['name_ko'], pos['name_en'], pos['eval']))
 
         # 2. Moves 삭제 및 재삽입
         cursor.execute('DELETE FROM moves WHERE parent_fen = ?', (pos['fen'],))

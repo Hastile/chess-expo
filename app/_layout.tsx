@@ -1,13 +1,25 @@
 // app/_layout.tsx
-import { INITIAL_PIECES, MoveState, createInitialState } from '@/scripts/Piece';
+import { createInitialState, INITIAL_PIECES, MoveState } from '@/scripts/Piece';
 import { Asset } from 'expo-asset';
-import * as Audio from 'expo-audio'; // ✅ 추가
-import { useAudioPlayer } from "expo-audio";
+import {
+    createAudioPlayer,
+    setAudioModeAsync,
+    type AudioPlayer,
+} from 'expo-audio';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Stack } from 'expo-router';
 import { SQLiteProvider } from 'expo-sqlite';
 import { createContext, useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Text, View } from 'react-native';
+
+const SOUND_SOURCES = {
+    move: require('../assets/sfx/move.wav'),
+    capture: require('../assets/sfx/capture.wav'),
+    castling: require('../assets/sfx/castling.wav'),
+    check: require('../assets/sfx/check.wav'),
+    gameover: require('../assets/sfx/gameover.wav'),
+} as const;
+type SoundType = keyof typeof SOUND_SOURCES;
 
 
 const PC_IP = "221.162.44.120";
@@ -45,32 +57,81 @@ export default function RootLayout() {
     };
 
     // ✅ 소리 플레이어를 여기에 정의하여 리마운트 영향 안 받게 함
-    const audioOptions = { downloadFirst: true };
-    const movePlayer = useAudioPlayer(require('../assets/sfx/move.wav'), audioOptions);
-    const capturePlayer = useAudioPlayer(require('../assets/sfx/capture.wav'), audioOptions);
-    const castlingPlayer = useAudioPlayer(require('../assets/sfx/castling.wav'), audioOptions);
-    const checkPlayer = useAudioPlayer(require('../assets/sfx/check.wav'), audioOptions);
-    const gameoverPlayer = useAudioPlayer(require('../assets/sfx/gameover.wav'), audioOptions);
+    //  sound players (expo-audio)
+    type SoundRef = ReturnType<typeof useRef<AudioPlayer | null>>;
 
-    // ✅ playSound 함수 (기존과 동일)
-    const playSound = useCallback((type: string) => {
-        const soundMap: any = {
-            move: movePlayer,
-            capture: capturePlayer,
-            castling: castlingPlayer,
-            check: checkPlayer,
-            gameover: gameoverPlayer
-        };
-        const p = soundMap[type];
-        if (p) {
-            // console.log(`[Audio] Playing: ${type}`); // ✅ 재생되는 소리 로그 출력
-            p.volume = 1.0;
-            p.seekTo(0);
-            p.play();
+    const movePlayer = useRef<AudioPlayer | null>(null);
+    const capturePlayer = useRef<AudioPlayer | null>(null);
+    const castlingPlayer = useRef<AudioPlayer | null>(null);
+    const checkPlayer = useRef<AudioPlayer | null>(null);
+    const gameoverPlayer = useRef<AudioPlayer | null>(null);
+
+    const getSoundRef = (type: SoundType): SoundRef => {
+        switch (type) {
+            case 'move': return movePlayer;
+            case 'capture': return capturePlayer;
+            case 'castling': return castlingPlayer;
+            case 'check': return checkPlayer;
+            case 'gameover': return gameoverPlayer;
+            default: return movePlayer;
         }
-    }, [movePlayer, capturePlayer, castlingPlayer, checkPlayer, gameoverPlayer]);
+    };
 
-    // ✅ 소리 재생 로직 수정: 기보(SAN) 문자열을 기반으로 판단
+    const loadSound = useCallback((ref: SoundRef, type: SoundType) => {
+        if (ref.current) return;
+        ref.current = createAudioPlayer(SOUND_SOURCES[type], { keepAudioSessionActive: false });
+    }, []);
+
+    useEffect(() => {
+        setAudioModeAsync({
+            playsInSilentMode: true,
+            shouldPlayInBackground: false,
+            interruptionMode: 'duckOthers',
+        }).catch(console.error);
+
+        loadSound(movePlayer, 'move');
+        loadSound(capturePlayer, 'capture');
+        loadSound(castlingPlayer, 'castling');
+        loadSound(checkPlayer, 'check');
+        loadSound(gameoverPlayer, 'gameover');
+
+        return () => {
+            [movePlayer, capturePlayer, castlingPlayer, checkPlayer, gameoverPlayer].forEach(async (ref) => {
+                if (ref.current) {
+                    ref.current.remove();
+                    ref.current = null;
+                }
+            });
+        };
+    }, [loadSound]);
+
+    const playSound = useCallback(async (type: SoundType) => {
+        const ref = getSoundRef(type);
+        try {
+            if (!ref.current) {
+                loadSound(ref, type);
+            }
+            const player = ref.current;
+            if (!player) return;
+            await player.seekTo(0);
+            player.play();
+        } catch (e) {
+            // reload once if playback failed (e.g., released)
+            // try {
+            //     ref.current = null;
+            //     loadSound(ref, type);
+            //     const player = ref.current;
+            //     if (player) {
+            //         await player.seekTo(0);
+            //         player.play();
+            //     }
+            // } catch (err) {
+            //     console.warn('Sound play error:', err);
+            // }
+            console.warn('Sound play error:', e);
+        }
+    }, [getSoundRef, loadSound]);
+
     const prevCount = useRef(0);
     useEffect(() => {
         const currentCount = moveState.moveHistory.length;
@@ -141,14 +202,6 @@ export default function RootLayout() {
         // const interval = setInterval(syncDatabase, 3000);
         // return () => clearInterval(interval);
     }, [syncDatabase]);
-
-    useEffect(() => {
-        async function setup() {
-            try { await Audio.setAudioModeAsync({ playsInSilentMode: true, interruptionMode: 'doNotMix' }); }
-            catch (e) { console.error(e); }
-        }
-        setup();
-    }, []);
 
     if (!dbLoaded) {
         return (

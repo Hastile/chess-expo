@@ -1,5 +1,14 @@
 import { getMoveDescription } from "./scripts/getMoveDescription";
 
-const result = getMoveDescription("e4 c5");
+const san = "e4 e5 Nf3 Nc6 Bb5"
 
-console.log(result);
+const result = getMoveDescription(san);
+
+const { line1, line2 } = result;
+
+const output = line2
+    ? `${line1}\n${line2}`
+    : line1;
+
+console.log(san);
+console.log(output);

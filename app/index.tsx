@@ -34,13 +34,11 @@ export default function Index() {
   const [openingInfo, setOpeningInfo] = useState<{
     name: string;
     enName: string;
-    desc: string | null;
     recommendations: any[];
     eval: string | number;
   }>({
     name: "알 수 없는 오프닝",
     enName: "Unknown",
-    desc: null,
     recommendations: [] as any[],
     eval: 0,
   });
@@ -68,8 +66,7 @@ export default function Index() {
         name_ko: string;
         name_en: string;
         eval: string | number;
-        desc: string;
-      }>('SELECT name_ko, name_en, eval, desc FROM positions WHERE fen = ?', [baseFen]);
+      }>('SELECT name_ko, name_en, eval FROM positions WHERE fen = ?', [baseFen]);
 
       const moves = await db.getAllAsync<{
         move_san: string;
@@ -83,7 +80,6 @@ export default function Index() {
           name: position.name_ko || "이름 없음",
           enName: position.name_en || "Unnamed",
           eval: position.eval ?? 0,
-          desc: position.desc || null,
           recommendations: moves.map(m => ({
             move: m.move_san,
             name: m.name,
@@ -92,7 +88,7 @@ export default function Index() {
           }))
         });
       } else {
-        setOpeningInfo({ name: "알 수 없는 오프닝", enName: "Unknown", recommendations: [], eval: 0, desc: null });
+        setOpeningInfo({ name: "알 수 없는 오프닝", enName: "Unknown", recommendations: [], eval: 0 });
       }
     } catch (e) {
       console.error("DB 조회 오류:", e);
@@ -221,13 +217,13 @@ export default function Index() {
           <Text style={styles.openingKoText}>{openingInfo.name}</Text>
           <Text style={styles.openingEnText}>{openingInfo.enName}</Text>
           {/* ✅ 고정 높이 컨테이너로 감싸서 UI 밀림 방지 */}
-          <View style={styles.descContainer}>
+          {/* <View style={styles.descContainer}>
             {openingInfo.desc ? (
               <Text style={styles.descText} numberOfLines={2}>
                 {openingInfo.desc}
               </Text>
             ) : null}
-          </View>
+          </View> */}
         </View>
 
         <View style={styles.timelineSection}>
@@ -260,7 +256,7 @@ export default function Index() {
           <Text style={styles.sectionTitle}>추천 수</Text>
           <Recommendations
             items={openingInfo.recommendations}
-            height={220}
+            height={210}
           />
         </View>
 
@@ -281,12 +277,12 @@ export default function Index() {
           parentFen={moveState.fenHistory.length > 1
             ? moveState.fenHistory[moveState.fenHistory.length - 2]
             : moveState.fenHistory[0]}
+          currentSan={moveState.moveHistory.map(m => m.san.trim().replace("... ", "")).join(" ")}
           lastMoveSan={moveState.moveHistory[moveState.moveHistory.length - 1]?.san || ""}
           currentPgn={currentPgn}
           openingNameKo={openingInfo.name}
           openingNameEn={openingInfo.enName}
           openingEval={openingInfo.eval}
-          openingDesc={openingInfo.desc}
           onSaveSuccess={handleSaveSuccess}
         />
       </View>
