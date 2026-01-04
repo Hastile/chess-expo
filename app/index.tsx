@@ -2,8 +2,9 @@
 import ChessBoard from "@/components/ChessBoard";
 
 import EvalBar from "@/components/EvalBar";
-import Recommendations from "@/components/Recommendations";
+import Recommendations, { EVAL_META, RecommendationItem } from "@/components/Recommendations";
 import { findKingSquare, getLegalMoves, INITIAL_PIECES, isSquareAttacked, opposite, Piece, Square } from "@/scripts/Piece";
+import { Chess } from "chess.js";
 
 import * as SQLite from "expo-sqlite";
 import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
@@ -12,7 +13,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { EvalType } from "@/components/Icons";
 import PromotionModal from "@/components/PromotionModal";
-import QuickAddForm from "@/components/QuickAddForm";
 
 import { GameContext } from "./_layout";
 
@@ -34,12 +34,12 @@ export default function Index() {
   const [openingInfo, setOpeningInfo] = useState<{
     name: string;
     enName: string;
-    recommendations: any[];
+    recommendations: RecommendationItem[];
     eval: string | number;
   }>({
     name: "알 수 없는 오프닝",
     enName: "Unknown",
-    recommendations: [] as any[],
+    recommendations: [] as RecommendationItem[],
     eval: 0,
   });
 
@@ -176,8 +176,6 @@ export default function Index() {
     fetchOpeningData();
   };
 
-  const [addModalVisible, setAddModalVisible] = useState(false); // ✅ 모달 상태 추가
-
   const currentPgn = useMemo(() => {
     const pgnParts: string[] = [];
     for (let i = 0; i < moveState.moveHistory.length; i += 2) {
@@ -188,6 +186,30 @@ export default function Index() {
     }
     return pgnParts.join(" ");
   }, [moveState.moveHistory]);
+
+  const recommendationArrows = useMemo(() => {
+    const normalizeSan = (san: string) =>
+      san.replace(/\s+/g, "").replace(/[+#?!]/g, "").replace(/\.\.\./g, "");
+
+    let chess: Chess | null = null;
+    try {
+      chess = new Chess(moveState.fen);
+    } catch {
+      chess = null;
+    }
+    if (!chess) return [];
+
+    const verboseMoves = chess.moves({ verbose: true });
+
+    return openingInfo.recommendations.flatMap((rec) => {
+      const normalizedRec = normalizeSan(rec.move);
+      const match = verboseMoves.find((m) => normalizeSan(m.san) === normalizedRec);
+      if (!match) return [];
+      const type = rec.type as EvalType;
+      const color = EVAL_META[type]?.color || "rgba(145,176,69,0.75)";
+      return [{ from: match.from as Square, to: match.to as Square, color, type }];
+    });
+  }, [moveState.fen, openingInfo.recommendations]);
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -202,6 +224,7 @@ export default function Index() {
           onSquarePress={onSquarePress}
           checkState={checkInfo}
           lastMoveEval={lastMoveEval}
+          recommendationArrows={recommendationArrows}
         />
 
         {pendingPromotion && (
@@ -259,32 +282,6 @@ export default function Index() {
             height={210}
           />
         </View>
-
-        {/* ✅ 우측 하단 플로팅 버튼 */}
-        <Pressable
-          style={styles.fab}
-          onPress={() => setAddModalVisible(true)}
-        >
-          <Text style={styles.fabText}>DB</Text>
-        </Pressable>
-
-        {/* ✅ 모달 컴포넌트 */}
-        <QuickAddForm
-          visible={addModalVisible}
-          onClose={() => setAddModalVisible(false)}
-          currentFen={moveState.fen}
-          // ✅ fenHistory에서 현재 수 바로 전의 FEN을 부모 FEN으로 전달합니다.
-          parentFen={moveState.fenHistory.length > 1
-            ? moveState.fenHistory[moveState.fenHistory.length - 2]
-            : moveState.fenHistory[0]}
-          currentSan={moveState.moveHistory.map(m => m.san.trim().replace("... ", "")).join(" ")}
-          lastMoveSan={moveState.moveHistory[moveState.moveHistory.length - 1]?.san || ""}
-          currentPgn={currentPgn}
-          openingNameKo={openingInfo.name}
-          openingNameEn={openingInfo.enName}
-          openingEval={openingInfo.eval}
-          onSaveSuccess={handleSaveSuccess}
-        />
       </View>
     </SafeAreaView>
   );
@@ -317,7 +314,7 @@ const styles = StyleSheet.create({
   descContainer: {
     height: 32,
     marginTop: 10,
-    justifyContent: 'center', // 텍스트가 한 줄일 때도 중앙 정렬
+    justifyContent: 'center', // ???? ? ?? ?? ?? ??
   },
   fab: {
     position: 'absolute',
@@ -330,10 +327,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
+    boxShadow: '0px 4px 12px rgba(0,0,0,0.3)',
     zIndex: 999,
   },
   fabText: {
@@ -342,3 +336,4 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
 });
+

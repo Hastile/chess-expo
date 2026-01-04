@@ -11,9 +11,11 @@ import Animated, {
 interface EvalBarProps {
     value?: number | string;
     height?: number;
+    min?: number; // 기본 -20
+    max?: number; // 기본 +20
 }
 
-export default function EvalBar({ value = 0, height = 8 }: EvalBarProps) {
+export default function EvalBar({ value = 0, height = 8, min = -20, max = 20 }: EvalBarProps) {
     // ✅ 애니메이션을 위한 공유값 (0.5는 중립 상태)
     const progress = useSharedValue(0.5);
 
@@ -24,8 +26,8 @@ export default function EvalBar({ value = 0, height = 8 }: EvalBarProps) {
         if (typeof value === "string") {
             target = value.startsWith("-") ? 0 : 1;
         } else {
-            const clamped = Math.max(-20, Math.min(20, value));
-            target = (clamped + 20) / 40;
+            const clamped = Math.max(min, Math.min(max, value));
+            target = (clamped - min) / (max - min || 1);
         }
 
         // 2. ✅ 부드러운 애니메이션 실행 (600ms 동안 Ease-Out 효과)

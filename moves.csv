@@ -1,0 +1,13 @@
+id,parent_fen,move_san,name,type,branches,priority,tier,is_sideline,is_trap,frequency
+3,rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq,e4,킹즈 폰 오프닝,book,"[""오픈 게임"",""시실리안 디펜스"",""프렌치 디펜스"",""카로칸 디펜스"",""스칸디나비안 디펜스""]",1,5,0,0,
+472,rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq,d4,퀸즈 폰 오프닝,book,"[""인디언 디펜스"",""클로즈드 게임"",""더치 디펜스"",""올드 베노니 디펜스"",""잉글런드 갬빗""]",2,5,0,0,
+986,rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq,Nf3,레티 오프닝,book,[],3,5,0,0,
+987,rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq,c4,잉글리시 오프닝,book,[],4,5,0,0,
+988,rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq,g3,킹즈 피앙케토 오프닝,book,[],5,5,0,0,
+989,rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq,b3,님조-라르센 어택,book,[],6,5,0,0,
+990,rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq,f4,버드 오프닝,book,[],7,5,0,0,
+991,rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq,Nc3,던스트 오프닝,book,[],8,5,0,0,
+1796,rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq,b4,폴리시 오프닝,book,[],11,5,0,0,
+1797,rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq,e3,바넛 크뢰위스 오프닝,book,[],9,5,0,0,
+1798,rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq,d3,미세스 오프닝,book,[],10,5,0,0,
+1799,rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq,g4,그로브 오프닝,book,[],12,5,0,0,

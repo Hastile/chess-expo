@@ -1,10 +1,7 @@
 import React, { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SvgProps } from "react-native-svg";
-
-export type EvalType =
-    | "brilliant" | "best" | "excellent" | "book" | "okay"
-    | "inaccuracy" | "mistake" | "blunder" | "critical" | "forced";
+import { EvalType } from "./Icons";
 
 export type RecommendationItem = {
     id?: string;
@@ -15,7 +12,7 @@ export type RecommendationItem = {
     eval?: number | string;
 };
 
-// ✅ SVG 컴포넌트 매핑
+// Local SVG components (babel-transform)
 const MOVE_ICONS: Record<string, React.FC<SvgProps>> = {
     brilliant: require("@/assets/images/moves/brilliant.svg").default,
     best: require("@/assets/images/moves/best.svg").default,
@@ -29,32 +26,31 @@ const MOVE_ICONS: Record<string, React.FC<SvgProps>> = {
     forced: require("@/assets/images/moves/forced.svg").default,
 };
 
-const EVAL_META: Record<EvalType, { color: string; label: string }> = {
-    brilliant: { color: "#1aada7", label: "기발함" },
-    best: { color: "#91b045", label: "최선" },
-    excellent: { color: "#91b045", label: "훌륭함" },
-    book: { color: "#a98865", label: "정석" },
-    okay: { color: "#a98865", label: "무난함" },
-    inaccuracy: { color: "#f7c044", label: "부정확" },
-    mistake: { color: "#e58f2a", label: "실수" },
-    blunder: { color: "#ca3430", label: "블런더" },
-    critical: { color: "#1aada7", label: "승부처" },
-    forced: { color: "#333333", label: "강제수" },
+export const EVAL_META: Record<EvalType, { color: string; label: string }> = {
+    brilliant: { color: "#1aada7", label: "Brilliant" },
+    best: { color: "#91b045", label: "Best" },
+    excellent: { color: "#91b045", label: "Excellent" },
+    book: { color: "#a98865", label: "Book" },
+    okay: { color: "#9aa3af", label: "Okay" },
+    inaccuracy: { color: "#f7c044", label: "Inaccuracy" },
+    mistake: { color: "#e58f2a", label: "Mistake" },
+    blunder: { color: "#ca3430", label: "Blunder" },
+    critical: { color: "#1aada7", label: "Critical" },
+    forced: { color: "#4a4a4a", label: "Forced" },
 };
 
-// ✅ 인터페이스 이름 수정 및 onSelectBranch 추가
 export interface RecommendationsProps {
     items?: RecommendationItem[];
     height?: number;
     onSelectMove?: (move: string, item: RecommendationItem) => void;
-    onSelectBranch?: (branch: string, parent: RecommendationItem) => void; // 👈 추가됨
+    onSelectBranch?: (branch: string, parent: RecommendationItem) => void;
 }
 
 export default function Recommendations({
     items = [],
     height = 200,
     onSelectMove,
-    onSelectBranch, // 👈 추가됨
+    onSelectBranch,
 }: RecommendationsProps) {
     const [openIndex, setOpenIndex] = useState<number | null>(null);
 
@@ -68,11 +64,10 @@ export default function Recommendations({
                         const canExpand = !!it.branches?.length;
                         const IconComponent = MOVE_ICONS[it.type];
 
-                        // ✅ 행 클릭 시 수행할 함수 통합
                         const handlePressRow = () => {
                             onSelectMove?.(it.move, it);
                             if (canExpand) {
-                                setOpenIndex(opened ? null : idx); // 👈 행 클릭 시 분기 토글
+                                setOpenIndex(opened ? null : idx);
                             }
                         };
 
@@ -94,12 +89,11 @@ export default function Recommendations({
 
                                         {canExpand && (
                                             <Pressable onPress={() => setOpenIndex(opened ? null : idx)} style={styles.expandBtn}>
-                                                <Text style={styles.expandIcon}>{opened ? "▾" : "▸"}</Text>
+                                                <Text style={styles.expandIcon}>{opened ? "▲" : "▼"}</Text>
                                             </Pressable>
                                         )}
                                     </Pressable>
 
-                                    {/* ✅ 우측 상단 SVG 배지 */}
                                     {IconComponent && (
                                         <View style={styles.iconBadge}>
                                             <IconComponent width={14} height={14} />
@@ -107,7 +101,6 @@ export default function Recommendations({
                                     )}
                                 </View>
 
-                                {/* branches */}
                                 {opened && it.branches?.map((b, i) => (
                                     <Pressable
                                         key={`${b}-${i}`}
